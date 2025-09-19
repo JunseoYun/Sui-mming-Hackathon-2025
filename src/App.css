@@ -85,6 +85,59 @@
   font-size: 0.85rem;
 }
 
+.home__team-toolbar {
+  margin: 12px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.home__language-toggle {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+}
+
+.home__language-toggle button {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 0.35em 0.9em;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.home__language-toggle button.is-active {
+  background: linear-gradient(135deg, #6f74ff, #8c4dff);
+  border-color: transparent;
+  color: #fff;
+}
+
+.home__team-summary {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.home__clear {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 0.4em 1em;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.home__clear:disabled {
+  opacity: 0.4;
+  cursor: default;
+  }
+
 .token-balance {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -232,6 +285,14 @@
   color: rgba(255, 255, 255, 0.75);
 }
 
+.battle-log__entry--player {
+  color: #99c8fe;
+}
+
+.battle-log__entry--opponent {
+  color: #ff7d7d;
+}
+
 .battle-log__timestamp {
   font-family: 'JetBrains Mono', monospace;
   color: rgba(255, 255, 255, 0.45);
@@ -321,6 +382,26 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.fusion__selection {
+  margin-top: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 14px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.fusion__selection ol {
+  padding-left: 18px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .page--inventory {

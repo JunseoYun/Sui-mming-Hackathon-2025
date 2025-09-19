@@ -1,7 +1,8 @@
 import React from 'react'
+import { translateSpecies, translateNote, translateEntityStatus, translateStatus } from '../i18n'
 
-function formatDate(value) {
-  return new Date(value).toLocaleString('ko-KR', {
+function formatDate(value, language) {
+  return new Date(value).toLocaleString(language === 'en' ? 'en-US' : 'ko-KR', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -11,100 +12,119 @@ function formatDate(value) {
 }
 
 export default function Inventory({ gameState, actions }) {
-  const { blockmons, dnaVault, seedHistory, adventure, fusionHistory, battleHistory, pvpHistory } = gameState
+  const {
+    blockmons,
+    dnaVault,
+    seedHistory,
+    adventure,
+    fusionHistory,
+    battleHistory,
+    pvpHistory,
+    language,
+    t
+  } = gameState
 
   return (
     <div className="page page--inventory">
       <header className="page__header">
-        <h1>인벤토리 & 진행 상황</h1>
-        <p className="page__subtitle">DNA, 시드, 배틀 이력을 한눈에 확인하세요.</p>
+        <h1>{t('inventory.title')}</h1>
+        <p className="page__subtitle">{t('inventory.subtitle')}</p>
       </header>
 
       <section className="inventory__section">
-        <h2>보유 DNA</h2>
+        <h2>{t('inventory.section.dna')}</h2>
         <div className="inventory__list">
           {dnaVault.map((entry) => (
             <div key={entry.seed} className="inventory__card">
-              <h3>{entry.species}</h3>
+              <h3>{translateSpecies(entry.species, language)}</h3>
               <p>DNA: {entry.dna}</p>
-              <p>상태: {entry.status}</p>
-              <p>확보: {formatDate(entry.acquiredAt)}</p>
-              <p>{entry.note}</p>
+              <p>{translateEntityStatus(entry.status, language)}</p>
+              <p>{formatDate(entry.acquiredAt, language)}</p>
+              <p>{translateNote(entry.note, language)}</p>
             </div>
           ))}
-          {dnaVault.length === 0 && <p>DNA가 아직 없습니다.</p>}
+          {dnaVault.length === 0 && <p>{t('inventory.empty.dna')}</p>}
         </div>
       </section>
 
       <section className="inventory__section">
-        <h2>활성 블록몬</h2>
+        <h2>{t('inventory.section.active')}</h2>
         <ul className="inventory__list inventory__list--simple">
           {blockmons.map((blockmon) => (
             <li key={blockmon.id}>
-              {blockmon.name} · {blockmon.species} · 전투력 {blockmon.power}
+              {blockmon.name} · {translateSpecies(blockmon.species, language)} · {t('blockmon.powerLabel')} {blockmon.power}
             </li>
           ))}
-          {!blockmons.length && <li>보유한 블록몬이 없습니다.</li>}
+          {!blockmons.length && <li>{t('inventory.empty.blockmon')}</li>}
         </ul>
       </section>
 
       <section className="inventory__section">
-        <h2>랜덤 시드 기록</h2>
+        <h2>{t('inventory.section.seed')}</h2>
         <ul className="inventory__list inventory__list--simple">
           {seedHistory.map((entry, index) => (
             <li key={`${entry.seed}-${index}`}>
-              {formatDate(entry.timestamp)} · {entry.context} · 시드 {entry.seed}
+              {formatDate(entry.timestamp, language)} · {entry.context} · {t('token.seed')} {entry.seed}
             </li>
           ))}
-          {!seedHistory.length && <li>아직 시드 기록이 없습니다.</li>}
+          {!seedHistory.length && <li>{t('inventory.empty.seed')}</li>}
         </ul>
       </section>
 
       <section className="inventory__section">
-        <h2>모험 상태</h2>
+        <h2>{t('inventory.section.adventure')}</h2>
         {adventure ? (
           <p>
-            상태: {adventure.status === 'active' ? '진행 중' : '완료'} · 팀 {adventure.team.length} / 탈진 {adventure.defeats} · 포션 {adventure.potions} · 사용 토큰 {adventure.tokensSpent}
+            {t('inventory.adventure.summary', {
+              status: translateStatus(adventure.status, language),
+              team: adventure.team.length,
+              defeats: adventure.defeats,
+              captured: adventure.capturedCount ?? 0,
+              potions: adventure.potions,
+              spent: adventure.tokensSpent
+            })}
           </p>
         ) : (
-          <p>모험 이력이 없습니다.</p>
+          <p>{t('inventory.empty.adventure')}</p>
         )}
-        <button onClick={() => actions.navigate('adventure')}>모험 로그 보기</button>
+        <button onClick={() => actions.navigate('adventure')}>{t('inventory.adventure.button')}</button>
       </section>
 
       <section className="inventory__section">
-        <h2>합성 기록</h2>
+        <h2>{t('inventory.section.fusion')}</h2>
         <ul className="inventory__list inventory__list--simple">
           {fusionHistory.map((record) => (
             <li key={record.id}>
-              {formatDate(record.createdAt)} · {record.parents[0].name} + {record.parents[1].name} → {record.result.name}
+              {formatDate(record.createdAt, language)} · {record.parents[0].name} + {record.parents[1].name} → {record.result.name}
             </li>
           ))}
-          {!fusionHistory.length && <li>합성 기록이 없습니다.</li>}
+          {!fusionHistory.length && <li>{t('inventory.empty.fusion')}</li>}
         </ul>
       </section>
 
       <section className="inventory__section">
-        <h2>배틀 기록</h2>
+        <h2>{t('inventory.section.battle')}</h2>
         <ul className="inventory__list inventory__list--simple">
           {battleHistory.map((record) => (
             <li key={record.id}>
-              {formatDate(record.completedAt)} · {record.player.name} vs {record.opponent.name} · {record.outcome === 'win' ? '승리' : '패배'} · 토큰 {record.tokensReward - record.tokensSpent} BM
+              {formatDate(record.completedAt, language)} · {record.player.name} vs {record.opponent.name} ·
+              {record.outcome === 'win' ? t('pvp.card.recentResultWin') : t('pvp.card.recentResultLose')} · {t('pvp.card.recentReward', { value: record.tokensReward - record.tokensSpent })}
             </li>
           ))}
-          {!battleHistory.length && <li>PVE 배틀 기록이 없습니다.</li>}
+          {!battleHistory.length && <li>{t('inventory.empty.battle')}</li>}
         </ul>
       </section>
 
       <section className="inventory__section">
-        <h2>PVP 기록</h2>
+        <h2>{t('inventory.section.pvp')}</h2>
         <ul className="inventory__list inventory__list--simple">
           {pvpHistory.map((record) => (
             <li key={record.id}>
-              {formatDate(record.completedAt)} · {record.player.name} vs {record.opponent.name} · {record.outcome === 'win' ? '승리' : '패배'} · 순이익 {record.netTokens >= 0 ? '+' : ''}{record.netTokens} BM
+              {formatDate(record.completedAt, language)} · {record.player.name} vs {record.opponent.name} ·
+              {record.outcome === 'win' ? t('pvp.card.recentResultWin') : t('pvp.card.recentResultLose')} · {t('pvp.card.recentNet', { value: record.netTokens >= 0 ? `+${record.netTokens}` : record.netTokens })}
             </li>
           ))}
-          {!pvpHistory.length && <li>PVP 기록이 없습니다.</li>}
+          {!pvpHistory.length && <li>{t('inventory.empty.pvp')}</li>}
         </ul>
       </section>
     </div>

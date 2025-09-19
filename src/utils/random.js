@@ -154,7 +154,7 @@ export function fuseBlockmons(parents, seed) {
     stats,
     rank: rarity,
     temperament: '합성으로 각성한 유전자',
-    origin: `${first.species} 조합`,
+    origin: '합성 DNA',
     power: statSum + hp,
     parents: parents.map((p) => ({ id: p.id, dna: p.dna, species: p.species }))
   }

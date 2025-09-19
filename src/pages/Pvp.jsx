@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react'
 import BattleLog from '../components/BattleLog'
+import { translateSpecies } from '../i18n'
 
 export default function Pvp({ gameState, actions }) {
-  const { blockmons, tokens, pvpHistory } = gameState
+  const { blockmons, tokens, pvpHistory, language, t } = gameState
   const [error, setError] = useState('')
 
   const latest = useMemo(() => (pvpHistory.length ? pvpHistory[pvpHistory.length - 1] : null), [pvpHistory])
@@ -16,45 +17,49 @@ export default function Pvp({ gameState, actions }) {
     }
   }
 
+  const primaryBlockmon = blockmons[0]
+
   return (
     <div className="page page--pvp">
       <header className="page__header">
-        <h1>PVP 매칭</h1>
-        <p className="page__subtitle">3 BM 토큰을 배팅하여 다른 수호자와 전투하세요. 승리 시 5 BM 획득, 1 BM 수수료 차감.</p>
+        <h1>{t('pvp.title')}</h1>
+        <p className="page__subtitle">{t('pvp.subtitle')}</p>
       </header>
 
       <section className="pvp__status">
         <div className="pvp__card">
-          <h2>출전 정보</h2>
-          {blockmons.length ? (
-            <p>{blockmons[0].name} · {blockmons[0].species}</p>
+          <h2>{t('pvp.card.entry')}</h2>
+          {primaryBlockmon ? (
+            <p>
+              {primaryBlockmon.name} · {translateSpecies(primaryBlockmon.species, language)}
+            </p>
           ) : (
-            <p>출전 가능한 블록몬이 없습니다.</p>
+            <p>{t('pvp.card.noBlockmon')}</p>
           )}
-          <p>보유 토큰: {tokens} BM</p>
+          <p>{t('pvp.card.tokens', { value: tokens })}</p>
         </div>
         <div className="pvp__card">
-          <h2>배팅 규칙</h2>
+          <h2>{t('pvp.card.rulesTitle')}</h2>
           <ul>
-            <li>배팅: 3 BM</li>
-            <li>승리 보상: 5 BM, 플랫폼 수수료 1 BM</li>
-            <li>순이익(승리 기준): +1 BM</li>
-            <li>패배 시 배팅 토큰 소멸</li>
+            <li>{t('pvp.card.ruleStake')}</li>
+            <li>{t('pvp.card.ruleReward')}</li>
+            <li>{t('pvp.card.ruleProfit')}</li>
+            <li>{t('pvp.card.ruleLoss')}</li>
           </ul>
         </div>
         <div className="pvp__card">
-          <h2>최근 전적</h2>
+          <h2>{t('pvp.card.recentTitle')}</h2>
           {latest ? (
             <ul>
-              <li>결과: {latest.outcome === 'win' ? '승리' : '패배'}</li>
-              <li>상대: {latest.opponent.name}</li>
-              <li>배팅: {latest.tokensStaked} BM</li>
-              <li>보상: {latest.tokensReward} BM</li>
-              <li>수수료: {latest.fee} BM</li>
-              <li>순이익: {latest.netTokens >= 0 ? '+' : ''}{latest.netTokens} BM</li>
+              <li>{latest.outcome === 'win' ? t('pvp.card.recentResultWin') : t('pvp.card.recentResultLose')}</li>
+              <li>{t('pvp.card.recentOpponent', { name: latest.opponent.name })}</li>
+              <li>{t('pvp.card.recentStake', { value: latest.tokensStaked })}</li>
+              <li>{t('pvp.card.recentReward', { value: latest.tokensReward })}</li>
+              <li>{t('pvp.card.recentFee', { value: latest.fee })}</li>
+              <li>{t('pvp.card.recentNet', { value: latest.netTokens >= 0 ? `+${latest.netTokens}` : latest.netTokens })}</li>
             </ul>
           ) : (
-            <p>아직 PVP 전적이 없습니다.</p>
+            <p>{t('pvp.card.recentNone')}</p>
           )}
         </div>
       </section>
@@ -62,11 +67,11 @@ export default function Pvp({ gameState, actions }) {
       {error && <p className="page__error">{error}</p>}
 
       <div className="pvp__actions">
-        <button onClick={handleMatch}>PVP 배틀 매칭 (3 BM)</button>
-        <button onClick={() => actions.navigate('home')}>홈으로</button>
+        <button onClick={handleMatch}>{t('pvp.actions.match')}</button>
+        <button onClick={() => actions.navigate('home')}>{t('pvp.actions.home')}</button>
       </div>
 
-      {latest && <BattleLog entries={latest.logs} />}
+      {latest && <BattleLog entries={latest.logs} t={t} />}
     </div>
   )
 }

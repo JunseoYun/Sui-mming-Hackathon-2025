@@ -1,7 +1,12 @@
 import React from 'react'
+import { translateSpecies, translateTemperament, translateOrigin } from '../i18n'
 
-export default function BlockmonCard({ blockmon, onSelect, selectable = false, isSelected = false }) {
+export default function BlockmonCard({ blockmon, onSelect, selectable = false, isSelected = false, language = 'ko', t = () => '' }) {
   const { name, dna, species, hp, stats, rank, origin, temperament, power } = blockmon
+  const speciesLabel = translateSpecies(species, language)
+  const originLabel = origin ? t('blockmon.origin', { value: translateOrigin(origin, language) }) : null
+  const temperamentLabel = temperament ? t('blockmon.temperament', { value: translateTemperament(temperament, language) }) : null
+  const powerLabel = power ? t('blockmon.powerLabel') : null
 
   return (
     <div
@@ -9,7 +14,7 @@ export default function BlockmonCard({ blockmon, onSelect, selectable = false, i
       onClick={selectable ? () => onSelect?.(blockmon) : undefined}
     >
       <div className="blockmon-card__header">
-        <span className="blockmon-card__species">{species}</span>
+        <span className="blockmon-card__species">{speciesLabel || species}</span>
         <span className="blockmon-card__dna">DNA #{dna}</span>
       </div>
       <div className="blockmon-card__title">
@@ -17,9 +22,9 @@ export default function BlockmonCard({ blockmon, onSelect, selectable = false, i
         {rank && <span className="blockmon-card__rank">{rank}</span>}
       </div>
       <div className="blockmon-card__hp">HP {hp}</div>
-      {power && <div className="blockmon-card__power">전투력 {power}</div>}
-      {origin && <div className="blockmon-card__origin">{origin}</div>}
-      {temperament && <div className="blockmon-card__temperament">{temperament}</div>}
+      {power && powerLabel && <div className="blockmon-card__power">{powerLabel} {power}</div>}
+      {originLabel && <div className="blockmon-card__origin">{originLabel}</div>}
+      {temperamentLabel && <div className="blockmon-card__temperament">{temperamentLabel}</div>}
       <ul className="blockmon-card__stats">
         <li>STR {stats.str}</li>
         <li>DEX {stats.dex}</li>

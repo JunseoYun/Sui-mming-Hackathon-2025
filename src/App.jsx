@@ -13,31 +13,70 @@ import {
   rollBattleOutcome,
   formatSeed
 } from './utils/random'
+import {
+  translate,
+  translateSpecies,
+  translateTemperament,
+  translateOrigin,
+  translateAction,
+  translateDetail,
+  translateStatus,
+  translateNote
+} from './i18n'
 import './App.css'
 import './index.css'
 
 const pages = {
-  home: { label: '홈', component: Home },
-  adventure: { label: '모험', component: Adventure },
-  battle: { label: '배틀', component: Battle },
-  fusion: { label: 'DNA 합성', component: Fusion },
-  pvp: { label: 'PVP', component: Pvp },
-  inventory: { label: '인벤토리', component: Inventory }
+  home: { labelKey: 'nav.home', component: Home },
+  adventure: { labelKey: 'nav.adventure', component: Adventure },
+  battle: { labelKey: 'nav.battle', component: Battle },
+  fusion: { labelKey: 'nav.fusion', component: Fusion },
+  pvp: { labelKey: 'nav.pvp', component: Pvp },
+  inventory: { labelKey: 'nav.inventory', component: Inventory }
 }
 
-function formatLogTime(offsetMinutes = 0) {
+function formatLogTime(language, offsetMinutes = 0) {
   const base = new Date(Date.now() + offsetMinutes * 60_000)
-  return base.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+  const locale = language === 'en' ? 'en-US' : 'ko-KR'
+  return base.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
 }
 
-function assembleBattleLog(rounds, outcome, startOffset = 0) {
-  const entries = rounds.map((round, index) => ({
-    time: formatLogTime(startOffset + index),
-    message: `[${round.actor}] ${round.action} (${round.detail}) | 상대 HP ${round.opponentHp}`
-  }))
+function assembleBattleLog(
+  rounds,
+  outcome,
+  startOffset = 0,
+  language,
+  playerActor,
+  opponentActor,
+  playerDisplayName,
+  opponentDisplayName
+) {
+  const playerDisplay = translateSpecies(playerDisplayName, language) || playerDisplayName
+  const opponentDisplay = translateSpecies(opponentDisplayName, language) || opponentDisplayName
 
-  const summary = outcome === 'win' ? '승리! 야생 블록몬을 제압했습니다.' : '패배… 팀을 재정비하세요.'
-  entries.push({ time: formatLogTime(startOffset + rounds.length + 1), message: summary })
+  const entries = rounds.map((round, index) => {
+    const isPlayer = round.actor === playerActor
+    const action = translateAction(round.action, language)
+    const detail = translateDetail(round.detail, language)
+    const message = translate(language, isPlayer ? 'battleLog.entry.player' : 'battleLog.entry.opponent', {
+      name: isPlayer ? playerDisplay : opponentDisplay,
+      action,
+      detail,
+      target: isPlayer ? opponentDisplay : playerDisplay,
+      hp: round.opponentHp
+    })
+    return {
+      time: formatLogTime(language, startOffset + index),
+      actorType: isPlayer ? 'player' : 'opponent',
+      message
+    }
+  })
+
+  const summaryKey = outcome === 'win' ? 'battleLog.summary.win' : 'battleLog.summary.defeat'
+  entries.push({
+    time: formatLogTime(language, startOffset + rounds.length + 1),
+    message: translate(language, summaryKey)
+  })
   return entries
 }
 
@@ -54,6 +93,10 @@ function App() {
   const [pvpHistory, setPvpHistory] = useState([])
   const [currentPage, setCurrentPage] = useState('home')
   const [systemMessage, setSystemMessage] = useState('')
+  const [adventureSelection, setAdventureSelection] = useState([])
+  const [language, setLanguage] = useState('ko')
+
+  const t = (key, params) => translate(language, key, params)
 
   const appendSeed = (seedHex, context) => {
     setSeedHistory((prev) => [
@@ -72,6 +115,7 @@ function App() {
     setPlayer({ nickname, joinedAt: new Date().toISOString(), starterSeed: formatSeed(starterSeed) })
     setTokens(10)
     setBlockmons([starter])
+    setAdventureSelection([starter.id])
     setDnaVault([
       {
         dna: starter.dna,
@@ -83,7 +127,7 @@ function App() {
       }
     ])
     appendSeed(formatSeed(starterSeed), 'Starter DNA')
-    setSystemMessage('첫 블록몬 DNA가 생성되었습니다!')
+    setSystemMessage(t('system.starterCreated'))
     setCurrentPage('home')
   }
 
@@ -94,11 +138,27 @@ function App() {
     }
   }
 
-  const startAdventure = () => {
-    if (!blockmons.length) return { error: '보유한 블록몬이 없습니다.' }
-    if (tokens < 1) return { error: 'BM 토큰이 부족합니다. (필요: 1)' }
+  const startAdventure = (selectedIdsParam) => {
+    if (!blockmons.length) return { error: t('errors.noBlockmon') }
+    if (tokens < 1) return { error: t('errors.noTokensAdventure') }
 
-    const team = blockmons.slice(0, 4)
+    const selectedIds = (selectedIdsParam ?? adventureSelection).slice(0, 4)
+    if (!selectedIds.length) {
+      return { error: t('errors.selectTeam') }
+    }
+
+    const team = selectedIds
+      .map((id) => blockmons.find((mon) => mon.id === id))
+      .filter(Boolean)
+      .slice(0, 4)
+
+    if (!team.length) {
+      return { error: t('errors.missingSelected') }
+    }
+
+    if (selectedIds.length !== team.length) {
+      setAdventureSelection(team.map((mon) => mon.id))
+    }
     const seed = generateSeed()
     const seedHex = formatSeed(seed)
     const startedAt = new Date()
@@ -113,8 +173,9 @@ function App() {
       knockedOut: false
     }))
 
-    let logs = [{ time: formatLogTime(), message: `${team.length}마리의 블록몬이 모험을 시작했습니다.` }]
+    let logs = [{ time: formatLogTime(language), message: t('adventure.log.start', { count: team.length }) }]
     const battleRecords = []
+    const capturedMonsters = []
     let defeats = 0
     let tokensEarned = 0
     let offset = 1
@@ -125,28 +186,59 @@ function App() {
       const activeMember = teamRecords.find((member) => !member.knockedOut)
       if (!activeMember) break
 
-      const playerMon = blockmons.find((mon) => mon.id === activeMember.id) ?? team[0]
+      const baseMon = blockmons.find((mon) => mon.id === activeMember.id) ?? team.find((mon) => mon.id === activeMember.id)
+      if (!baseMon) {
+        activeMember.knockedOut = true
+        continue
+      }
+      const playerMon = { ...baseMon, hp: activeMember.remainingHp }
       const battleSeed = generateSeed()
       const battleSeedHex = formatSeed(battleSeed)
       const wild = createBlockmonFromSeed(battleSeed, { origin: '야생 조우' })
       const result = rollBattleOutcome(playerMon, wild, battleSeed)
 
       const encounterEntry = {
-        time: formatLogTime(offset++),
-        message: `야생 ${wild.species}을(를) 조우했습니다.`
+        time: formatLogTime(language, offset++),
+        message: t('adventure.log.encounter', { species: translateSpecies(wild.species, language) })
       }
 
-      const battleLogEntries = assembleBattleLog(result.rounds, result.outcome, offset)
+      const battleLogEntries = assembleBattleLog(
+        result.rounds,
+        result.outcome,
+        offset,
+        language,
+        playerMon.species,
+        wild.species,
+        playerMon.name ?? playerMon.species,
+        wild.name ?? wild.species
+      )
       const logCount = battleLogEntries.length
       offset += logCount + 1
 
-      logs = [...logs, encounterEntry, ...battleLogEntries]
+      let battleEntryLog = [encounterEntry, ...battleLogEntries]
+      logs = [...logs, ...battleEntryLog]
 
       const reward = result.outcome === 'win' ? 2 : 0
       tokensEarned += reward
       defeats += result.outcome === 'win' ? 0 : 1
       activeMember.remainingHp = result.remainingHp
       activeMember.knockedOut = result.outcome !== 'win'
+
+      if (result.outcome === 'win') {
+        const captured = {
+          ...wild,
+          id: wild.id,
+          stats: { ...wild.stats },
+          origin: '포획된 야생 블록몬'
+        }
+        capturedMonsters.push(captured)
+        const captureMessage = {
+          time: formatLogTime(language, offset++),
+          message: t('adventure.log.capture', { species: translateSpecies(wild.species, language) })
+        }
+        logs.push(captureMessage)
+        battleEntryLog = [...battleEntryLog, captureMessage]
+      }
 
       appendSeed(battleSeedHex, `Wild Battle #${battleRecords.length + 1}`)
 
@@ -160,14 +252,14 @@ function App() {
         player: playerSnapshot,
         opponent: opponentSnapshot,
         outcome: result.outcome,
-        logEntries: [encounterEntry, ...battleLogEntries],
+        logEntries: battleEntryLog,
         tokensSpent: 0,
         tokensReward: reward,
         completedAt
       })
     }
 
-    logs.push({ time: formatLogTime(offset), message: '팀 전원 탈진. 모험이 종료되었습니다.' })
+    logs.push({ time: formatLogTime(language, offset), message: t('adventure.log.complete') })
 
     const adventureState = {
       id: `adv-${seedHex}`,
@@ -181,32 +273,52 @@ function App() {
       tokensSpent: 1,
       tokensEarned,
       defeats,
-      battles: battleRecords.length
+      battles: battleRecords.length,
+      capturedCount: capturedMonsters.length
+    }
+
+    if (capturedMonsters.length) {
+      setBlockmons((prev) => [...prev, ...capturedMonsters])
+      setDnaVault((prev) => [
+        ...prev,
+        ...capturedMonsters.map((mon) => ({
+          dna: mon.dna,
+          species: mon.species,
+          seed: mon.seed,
+          status: '활성',
+          acquiredAt: new Date().toISOString(),
+          note: '모험 포획'
+        }))
+      ])
     }
 
     setTokens((prev) => prev - 1 + tokensEarned)
     setAdventure(adventureState)
     setBattle(battleRecords[battleRecords.length - 1] ?? null)
     setBattleHistory((prev) => [...prev, ...battleRecords])
-    setSystemMessage(`모험 완료! 전투 ${battleRecords.length}회, 보상 +${tokensEarned} BM`)
+    setSystemMessage(t('system.adventureSummary', {
+      battles: battleRecords.length,
+      captured: capturedMonsters.length,
+      tokens: tokensEarned
+    }))
     setCurrentPage('adventure')
     return { success: true }
   }
 
   const performFusion = (firstId, secondId) => {
     if (firstId === secondId) {
-      return { error: '서로 다른 두 블록몬을 선택하세요.' }
+      return { error: t('errors.sameBlockmon') }
     }
     const first = blockmons.find((mon) => mon.id === firstId)
     const second = blockmons.find((mon) => mon.id === secondId)
     if (!first || !second) {
-      return { error: '선택한 블록몬을 찾을 수 없습니다.' }
+      return { error: t('errors.missingSelected') }
     }
     if (first.species !== second.species) {
-      return { error: '같은 종족의 블록몬만 합성할 수 있습니다.' }
+      return { error: t('errors.sameSpeciesFusion') }
     }
     if (tokens < 1) {
-      return { error: 'BM 토큰이 부족합니다. (합성 비용: 1)' }
+      return { error: t('errors.noTokensFusion') }
     }
 
     const fusionSeed = generateSeed()
@@ -222,7 +334,7 @@ function App() {
         seed: newborn.seed,
         status: '보관',
         acquiredAt: new Date().toISOString(),
-        note: `${first.name} + ${second.name} 합성`
+        note: '합성 결과'
       }
     ])
     appendSeed(formatSeed(fusionSeed), 'Fusion Result')
@@ -234,19 +346,28 @@ function App() {
       createdAt: new Date().toISOString()
     }
     setFusionHistory((prev) => [...prev, record])
-    setSystemMessage('새로운 블록몬이 탄생했습니다! 인벤토리에서 확인하세요.')
+    setSystemMessage(t('system.fusionCreated'))
     return { success: true, newborn: record }
   }
 
   const runPvpMatch = () => {
-    if (!blockmons.length) return { error: '출전 가능한 블록몬이 없습니다.' }
-    if (tokens < 3) return { error: 'BM 토큰이 부족합니다. (필요: 3)' }
+    if (!blockmons.length) return { error: t('errors.noBlockmonPvp') }
+    if (tokens < 3) return { error: t('errors.noTokensPvp') }
 
     const contender = blockmons[0]
     const opponentSeed = generateSeed()
     const opponent = createBlockmonFromSeed(opponentSeed, { origin: 'PVP 상대' })
     const result = rollBattleOutcome(contender, opponent, opponentSeed)
-    const logs = assembleBattleLog(result.rounds, result.outcome)
+    const logs = assembleBattleLog(
+      result.rounds,
+      result.outcome,
+      0,
+      language,
+      contender.species,
+      opponent.species,
+      contender.name ?? contender.species,
+      opponent.name ?? opponent.species
+    )
 
     const stake = 3
     const reward = result.outcome === 'win' ? 5 : 0
@@ -270,11 +391,7 @@ function App() {
     }
 
     setPvpHistory((prev) => [...prev, record])
-    setSystemMessage(
-      result.outcome === 'win'
-        ? 'PVP 매치에서 승리했습니다! (순이익 +1 BM)'
-        : 'PVP 매치에서 패배했습니다. 배팅 토큰 3 BM을 잃었습니다.'
-    )
+    setSystemMessage(result.outcome === 'win' ? t('system.pvpWin') : t('system.pvpLose'))
     setCurrentPage('pvp')
     return { success: true, record }
   }
@@ -291,7 +408,10 @@ function App() {
       battleHistory,
       fusionHistory,
       pvpHistory,
-      systemMessage
+      systemMessage,
+      adventureSelection,
+      language,
+      t
     }),
     [
       player,
@@ -304,7 +424,10 @@ function App() {
       battleHistory,
       fusionHistory,
       pvpHistory,
-      systemMessage
+      systemMessage,
+      adventureSelection,
+      language,
+      t
     ]
   )
 
@@ -313,13 +436,15 @@ function App() {
     startAdventure,
     performFusion,
     runPvpMatch,
-    registerUser
+    registerUser,
+    setAdventureSelection,
+    setLanguage
   }
 
   if (!player) {
     return (
       <div className="app">
-        <Signup onRegister={registerUser} />
+        <Signup onRegister={registerUser} language={language} t={t} setLanguage={setLanguage} />
       </div>
     )
   }
@@ -329,15 +454,15 @@ function App() {
   return (
     <div className="app">
       <header className="app__top">
-        <span className="app__brand">Blockmon Battle Prototype</span>
+        <span className="app__brand">{t('app.brand')}</span>
         <nav className="app__nav">
-          {Object.entries(pages).map(([key, { label }]) => (
+          {Object.entries(pages).map(([key, { labelKey }]) => (
             <button
               key={key}
               className={currentPage === key ? 'is-active' : ''}
               onClick={() => navigate(key)}
             >
-              {label}
+              {t(labelKey)}
             </button>
           ))}
         </nav>

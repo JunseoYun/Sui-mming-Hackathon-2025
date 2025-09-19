@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react'
 import BlockmonCard from '../components/BlockmonCard'
+import { translateSpecies } from '../i18n'
 
 export default function Fusion({ gameState, actions }) {
-  const { blockmons, tokens } = gameState
+  const { blockmons, tokens, language, t } = gameState
   const [selected, setSelected] = useState([])
   const [error, setError] = useState('')
   const [resultMessage, setResultMessage] = useState('')
@@ -14,9 +15,16 @@ export default function Fusion({ gameState, actions }) {
       if (current.includes(blockmon.id)) {
         return current.filter((id) => id !== blockmon.id)
       }
-      if (current.length >= 2) {
-        return [current[1], blockmon.id]
+
+      if (!current.length) {
+        return [blockmon.id]
       }
+
+      const firstSelected = blockmons.find((candidate) => candidate.id === current[0])
+      if (firstSelected && firstSelected.species !== blockmon.species) {
+        return [blockmon.id]
+      }
+
       return [...current, blockmon.id]
     })
   }
@@ -27,51 +35,64 @@ export default function Fusion({ gameState, actions }) {
   )
 
   const preview = useMemo(() => {
-    if (selectedBlockmons.length !== 2) return null
-    if (selectedBlockmons[0].species !== selectedBlockmons[1].species) return null
     const [first, second] = selectedBlockmons
+    if (!first || !second) return null
+    if (first.species !== second.species) return null
     const stats = {}
     Object.keys(first.stats).forEach((key) => {
       stats[key] = Math.round((first.stats[key] + second.stats[key]) / 2 + 1)
     })
     return {
       id: 'preview',
-      name: `${first.species} 예측체`,
+      name: `${translateSpecies(first.species, language)} Prototype`,
       species: first.species,
-      dna: '예상 DNA',
+      dna: 'PREVIEW',
       hp: Math.round((first.hp + second.hp) / 2 + 10),
       stats,
-      rank: '예상',
-      origin: `${first.name} / ${second.name} 합성 예상`,
-      temperament: '랜덤 시드 적용 예정',
+      rank: 'Preview',
+      origin: '합성 DNA',
+      temperament: '합성으로 각성한 유전자',
       power: Math.round((first.power + second.power) / 2)
     }
-  }, [selectedBlockmons])
+  }, [selectedBlockmons, language, t])
 
   const performFusion = () => {
-    if (selectedBlockmons.length !== 2) {
-      setError('두 마리의 블록몬을 선택해주세요.')
+    if (selectedBlockmons.length < 2) {
+      setError(t('fusion.error.selectTwo'))
       return
     }
-    const result = actions.performFusion(selectedBlockmons[0].id, selectedBlockmons[1].id)
+    const [first, second] = selectedBlockmons
+    if (first.species !== second.species) {
+      setError(t('fusion.error.sameSpecies'))
+      return
+    }
+
+    const result = actions.performFusion(first.id, second.id)
     if (result?.error) {
       setError(result.error)
     } else {
-      setSelected([])
-      setResultMessage('합성이 완료되었습니다! 인벤토리에서 결과를 확인하세요.')
+      const remaining = selected.filter((id) => id !== first.id && id !== second.id)
+      setSelected(remaining)
+      const newborn = result.newborn?.result ?? result.newborn
+      const newbornName = newborn?.name ?? t('fusion.alert.title', { name: 'Blockmon' })
+      setResultMessage(t('fusion.result.message', { name: newbornName }))
+      if (typeof window !== 'undefined') {
+        const dnaInfo = newborn?.dna ? `\n${t('fusion.alert.dna', { dna: newborn.dna })}` : ''
+        window.alert(`${t('fusion.alert.title', { name: newbornName })}${dnaInfo}`)
+      }
     }
   }
 
   return (
     <div className="page page--fusion">
       <header className="page__header">
-        <h1>DNA 합성</h1>
-        <p className="page__subtitle">같은 종족의 DNA를 조합해 새로운 블록몬을 탄생시키세요. (비용 1 BM)</p>
+        <h1>{t('fusion.title')}</h1>
+        <p className="page__subtitle">{t('fusion.subtitle')}</p>
       </header>
 
       <section>
-        <h2>보유 블록몬</h2>
-        <p>현재 토큰: {tokens} BM</p>
+        <h2>{t('fusion.section.blockmons')}</h2>
+        <p>{t('fusion.tokens', { value: tokens })}</p>
         <div className="blockmon-grid">
           {blockmons.map((blockmon) => (
             <BlockmonCard
@@ -80,15 +101,30 @@ export default function Fusion({ gameState, actions }) {
               selectable
               isSelected={selected.includes(blockmon.id)}
               onSelect={handleSelect}
+              language={language}
+              t={t}
             />
           ))}
         </div>
+        {selectedBlockmons.length > 0 && (
+          <div className="fusion__selection">
+            <p>{t('fusion.selection.lead', { count: selectedBlockmons.length })}</p>
+            <ol>
+              {selectedBlockmons.map((blockmon, index) => (
+                <li key={blockmon.id}>
+                  {index + 1}. {blockmon.name} · {translateSpecies(blockmon.species, language)}
+                </li>
+              ))}
+            </ol>
+            {selectedBlockmons.length > 2 && <p>{t('fusion.selection.notice')}</p>}
+          </div>
+        )}
       </section>
 
       {preview && (
         <section className="fusion__preview">
-          <h2>예상 결과</h2>
-          <BlockmonCard blockmon={preview} />
+          <h2>{t('fusion.preview.title')}</h2>
+          <BlockmonCard blockmon={preview} language={language} t={t} />
         </section>
       )}
 
@@ -96,8 +132,10 @@ export default function Fusion({ gameState, actions }) {
       {resultMessage && <p>{resultMessage}</p>}
 
       <div className="fusion__actions">
-        <button onClick={performFusion} disabled={tokens < 1}>DNA 합성 실행 (1 BM)</button>
-        <button onClick={() => actions.navigate('home')}>홈으로</button>
+        <button onClick={performFusion} disabled={tokens < 1 || selectedBlockmons.length < 2}>
+          {t('fusion.button.execute')}
+        </button>
+        <button onClick={() => actions.navigate('home')}>{t('fusion.button.home')}</button>
       </div>
     </div>
   )

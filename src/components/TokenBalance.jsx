@@ -1,23 +1,24 @@
 import React from 'react'
 
-export default function TokenBalance({ tokens, dnaCount, activeCount, seedCount }) {
+export default function TokenBalance({ tokens, dnaCount, activeCount, seedCount, t, language = 'ko' }) {
+  const locale = language === 'en' ? 'en-US' : 'ko-KR'
   return (
     <div className="token-balance">
       <div>
-        <span className="token-balance__label">BM 토큰</span>
-        <span className="token-balance__value">{tokens.toLocaleString()} 개</span>
+        <span className="token-balance__label">{t('token.bm')}</span>
+        <span className="token-balance__value">{tokens.toLocaleString(locale)}</span>
       </div>
       <div>
-        <span className="token-balance__label">DNA 보관</span>
-        <span className="token-balance__value">{dnaCount} 개체</span>
+        <span className="token-balance__label">{t('token.dna')}</span>
+        <span className="token-balance__value">{dnaCount.toLocaleString(locale)}</span>
       </div>
       <div>
-        <span className="token-balance__label">활성 블록몬</span>
-        <span className="token-balance__value">{activeCount} 마리</span>
+        <span className="token-balance__label">{t('token.active')}</span>
+        <span className="token-balance__value">{activeCount.toLocaleString(locale)}</span>
       </div>
       <div>
-        <span className="token-balance__label">시드 기록</span>
-        <span className="token-balance__value">{seedCount} 개</span>
+        <span className="token-balance__label">{t('token.seed')}</span>
+        <span className="token-balance__value">{seedCount.toLocaleString(locale)}</span>
       </div>
     </div>
   )
