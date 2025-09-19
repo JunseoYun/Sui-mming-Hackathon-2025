@@ -6,6 +6,7 @@ import { translateSpecies } from '../i18n'
 export default function Home({ gameState, actions }) {
   const { player, tokens, blockmons, dnaVault, seedHistory, adventure, adventureSelection, language, t } = gameState
   const [error, setError] = useState('')
+  const [showPurchase, setShowPurchase] = useState(false)
   const selectedTeam = adventureSelection ?? []
 
   const selectedBlockmons = useMemo(
@@ -41,6 +42,8 @@ export default function Home({ gameState, actions }) {
     actions.setAdventureSelection([])
   }
 
+  const purchaseOptions = [10, 30, 50, 100]
+
   return (
     <div className="page page--home">
       <header className="page__header">
@@ -70,6 +73,28 @@ export default function Home({ gameState, actions }) {
         t={t}
         language={language}
       />
+
+      <div className="home__purchase">
+        <button onClick={() => setShowPurchase((prev) => !prev)}>{t('token.purchaseButton')}</button>
+        {showPurchase && (
+          <div className="home__purchase-panel">
+            <p>{t('token.purchaseTitle')}</p>
+            <div className="home__purchase-options">
+              {purchaseOptions.map((amount) => (
+                <button
+                  key={amount}
+                  onClick={() => {
+                    actions.purchaseTokens(amount)
+                    setShowPurchase(false)
+                  }}
+                >
+                  {t('token.purchaseOption', { amount })}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       <section>
         <h2>{t('home.section.blockmons')}</h2>

@@ -354,6 +354,11 @@ function App() {
     return { success: true, newborn: record }
   }
 
+  const purchaseTokens = (amount) => {
+    setTokens((prev) => prev + amount)
+    setSystemMessage(t('token.purchaseConfirm', { amount }))
+  }
+
   const runPvpMatch = () => {
     if (!blockmons.length) return { error: t('errors.noBlockmonPvp') }
     if (tokens < 3) return { error: t('errors.noTokensPvp') }
@@ -442,7 +447,8 @@ function App() {
     runPvpMatch,
     registerUser,
     setAdventureSelection,
-    setLanguage
+    setLanguage,
+    purchaseTokens
   }
 
   if (!player) {

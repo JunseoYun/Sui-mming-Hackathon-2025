@@ -115,6 +115,42 @@
   color: #fff;
 }
 
+.home__purchase {
+  margin: 16px 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.home__purchase > button {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.home__purchase-panel {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.home__purchase-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.home__purchase-options button {
+  background: linear-gradient(135deg, #5b6bff, #8a5fff);
+  border: none;
+  padding: 0.5em 0.8em;
+  font-size: 0.85rem;
+}
+
 .home__team-summary {
   margin-top: 12px;
   display: flex;
@@ -438,59 +474,152 @@
   font-size: 0.85rem;
 }
 
-.signup__card {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  padding: 24px;
+.signup-screen {
+  flex: 1;
   display: flex;
-  flex-direction: column;
-  gap: 20px;
-  color: rgba(255, 255, 255, 0.85);
+  align-items: center;
+  justify-content: center;
 }
 
-.signup__form {
+.signup-card {
+  max-width: 540px;
+  width: 100%;
+  padding: 56px 54px;
+  border-radius: 28px;
+  background: linear-gradient(180deg, rgba(20, 32, 62, 0.8) 0%, rgba(9, 15, 30, 0.95) 100%);
+  border: 1px solid rgba(126, 148, 255, 0.2);
+  box-shadow: 0 30px 80px rgba(6, 10, 24, 0.7);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  align-items: center;
+  gap: 32px;
+  text-align: center;
 }
 
-.signup__form label {
+.signup-header {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+}
+
+.signup-title {
+  font-size: 1.6rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.signup-subtitle {
+  color: rgba(229, 233, 255, 0.82);
   font-size: 0.95rem;
 }
 
-.signup__form input {
-  padding: 0.75em 1em;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(4, 10, 26, 0.65);
+.signup-tagline {
+  color: rgba(199, 214, 255, 0.75);
+  font-size: 0.85rem;
+}
+
+.signup-language {
+  display: flex;
+  gap: 10px;
+}
+
+.signup-language button {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 0.4em 0.9em;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.signup-language button.is-active {
+  background: linear-gradient(135deg, #6f74ff, #8c4dff);
+  border-color: transparent;
   color: #fff;
 }
 
-.signup__form input:focus {
+.signup-description {
+  color: rgba(235, 240, 255, 0.88);
+  font-size: 0.9rem;
+}
+
+.signup-icon {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.signup-icon-shell {
+  position: relative;
+  width: 156px;
+  height: 156px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(120, 135, 255, 0.4), rgba(145, 97, 255, 0.8));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 0 20px rgba(35, 48, 97, 0.6);
+}
+
+.signup-icon-inner {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(22, 32, 58, 0.95) 0%, rgba(10, 15, 28, 0.95) 70%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.signup-icon-svg {
+  width: 64px;
+  height: 64px;
+  filter: drop-shadow(0 12px 24px rgba(104, 150, 255, 0.45));
+}
+
+.signup-divider {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(120, 138, 255, 0.35) 50%, rgba(255, 255, 255, 0) 100%);
+}
+
+.signup-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.signup-form input {
+  width: 100%;
+  padding: 0.85em 1em;
+  border-radius: 12px;
+  border: 1px solid rgba(143, 162, 255, 0.35);
+  background: rgba(7, 12, 28, 0.75);
+  color: #fff;
+  font-size: 0.95rem;
+}
+
+.signup-form input:focus {
   outline: 2px solid rgba(116, 80, 255, 0.7);
 }
 
-.signup__error {
+.signup-form button {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.signup-error {
   color: #ff8f8f;
   font-size: 0.85rem;
 }
 
-.signup__info {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  color: rgba(255, 255, 255, 0.78);
-}
-
-.signup__info ul {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 0.9rem;
+.signup-cost {
+  margin-top: -10px;
+  color: rgba(129, 155, 255, 0.85);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
 }
 
 @media (max-width: 768px) {
