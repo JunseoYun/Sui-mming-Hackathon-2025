@@ -325,9 +325,13 @@ function App() {
     const newborn = fuseBlockmons([first, second], fusionSeed)
 
     setTokens((prev) => prev - 1)
-    setBlockmons((prev) => [...prev, newborn])
+    setBlockmons((prev) => [
+      ...prev.filter((mon) => mon.id !== firstId && mon.id !== secondId),
+      newborn
+    ])
+    setAdventureSelection((prev) => prev.filter((id) => id !== firstId && id !== secondId))
     setDnaVault((prev) => [
-      ...prev,
+      ...prev.filter((entry) => entry.seed !== (first.seed ?? first.id) && entry.seed !== (second.seed ?? second.id)),
       {
         dna: newborn.dna,
         species: newborn.species,
