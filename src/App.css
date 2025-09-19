@@ -1,0 +1,433 @@
+.app {
+  background: linear-gradient(160deg, rgba(33, 45, 88, 0.92), rgba(14, 17, 36, 0.9));
+  border-radius: 32px;
+  box-shadow: 0 20px 60px rgba(7, 12, 24, 0.65);
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-height: 100%;
+}
+
+.app__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 16px;
+}
+
+.app__brand {
+  font-size: 1.2rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.app__nav {
+  display: flex;
+  gap: 12px;
+}
+
+.app__nav button {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 0.45em 1.2em;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+}
+
+.app__nav button.is-active {
+  background: linear-gradient(135deg, #6f74ff, #8c4dff);
+  border-color: transparent;
+}
+
+.app__content {
+  flex: 1;
+  overflow: auto;
+  padding-right: 6px;
+}
+
+.app__notice {
+  background: rgba(99, 110, 255, 0.18);
+  border: 1px solid rgba(138, 93, 255, 0.4);
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-size: 0.9rem;
+  color: rgba(235, 242, 255, 0.92);
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.page--signup {
+  gap: 36px;
+}
+
+.page__header {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.page__subtitle {
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 0.95rem;
+}
+
+.page__error {
+  color: #ff9494;
+  font-size: 0.85rem;
+}
+
+.token-balance {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 20px 24px;
+}
+
+.token-balance__label {
+  display: block;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+}
+
+.token-balance__value {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.blockmon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+.blockmon-grid--compact {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.blockmon-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.blockmon-card--selectable {
+  cursor: pointer;
+}
+
+.blockmon-card--selectable:hover {
+  transform: translateY(-4px);
+  border-color: rgba(138, 93, 255, 0.6);
+}
+
+.blockmon-card--selected {
+  border-color: #8a5fff;
+  box-shadow: 0 0 20px rgba(138, 93, 255, 0.35);
+}
+
+.blockmon-card__header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.blockmon-card__name {
+  font-size: 1.2rem;
+}
+
+.blockmon-card__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.blockmon-card__rank {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(116, 80, 255, 0.3);
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+}
+
+.blockmon-card__hp {
+  font-weight: 600;
+}
+
+.blockmon-card__power {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.blockmon-card__origin,
+.blockmon-card__temperament {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.blockmon-card__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(60px, 1fr));
+  gap: 6px 12px;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.actions button {
+  flex: 1 1 180px;
+}
+
+.battle-log {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.battle-log h3 {
+  font-size: 1.05rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.battle-log__entries {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.battle-log__entry {
+  display: flex;
+  gap: 16px;
+  font-size: 0.88rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.battle-log__timestamp {
+  font-family: 'JetBrains Mono', monospace;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.page__footer-actions,
+.pvp__actions,
+.battle__actions,
+.fusion__actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.adventure__team-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.adventure__member {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.adventure__status {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.66);
+}
+
+.adventure__member.is-ko .adventure__status {
+  color: #ff9393;
+}
+
+.battle__arena {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 24px;
+  align-items: center;
+}
+
+.battle__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.battle__side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.battle__versus {
+  justify-self: center;
+  font-size: 1.6rem;
+  letter-spacing: 0.2em;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.pvp__status {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 18px;
+}
+
+.pvp__card {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.fusion__cost {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.fusion__preview,
+.fusion__result {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.page--inventory {
+  gap: 24px;
+}
+
+.inventory__section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.inventory__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.inventory__list--simple {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.inventory__card {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
+.signup__card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.signup__form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.signup__form label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.95rem;
+}
+
+.signup__form input {
+  padding: 0.75em 1em;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(4, 10, 26, 0.65);
+  color: #fff;
+}
+
+.signup__form input:focus {
+  outline: 2px solid rgba(116, 80, 255, 0.7);
+}
+
+.signup__error {
+  color: #ff8f8f;
+  font-size: 0.85rem;
+}
+
+.signup__info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.signup__info ul {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+  body {
+    padding: 12px;
+  }
+
+  .app {
+    padding: 24px;
+  }
+
+  .app__top {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .app__nav {
+    flex-wrap: wrap;
+  }
+}
