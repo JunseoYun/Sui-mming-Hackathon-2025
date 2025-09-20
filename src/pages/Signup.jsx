@@ -1,13 +1,27 @@
-import React, { useState } from "react";
-import { ConnectButton, useCurrentAccount } from "@mysten/dapp-kit";
+import React, { useEffect, useState } from "react";
+import {
+  useConnectWallet,
+  useCurrentAccount,
+  useWallets,
+} from "@mysten/dapp-kit";
+import { isEnokiWallet } from "@mysten/enoki";
 
-export default function Signup({ onRegister, t, language }) {
+export default function Signup({ onRegister, t }) {
   const [nickname, setNickname] = useState("");
   const [error, setError] = useState("");
   const currentAccount = useCurrentAccount();
+  const { mutate: connect, isPending: isConnecting } = useConnectWallet();
+  const enokiWallets = useWallets().filter(isEnokiWallet);
+  const googleWallet = enokiWallets.find((wallet) => wallet.provider === "google");
 
   const formatAddress = (address) =>
     `${address.slice(0, 6)}...${address.slice(-4)}`;
+
+  useEffect(() => {
+    if (googleWallet && error === t("signup.wallet.unavailable")) {
+      setError("");
+    }
+  }, [googleWallet, error, t]);
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -43,13 +57,7 @@ export default function Signup({ onRegister, t, language }) {
                 xmlns="http://www.w3.org/2000/svg"
               >
                 <defs>
-                  <linearGradient
-                    id="suiGradient"
-                    x1="0%"
-                    y1="0%"
-                    x2="100%"
-                    y2="100%"
-                  >
+                  <linearGradient id="suiGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                     <stop offset="0%" stopColor="#8ae2ff" />
                     <stop offset="100%" stopColor="#7468ff" />
                   </linearGradient>
@@ -66,7 +74,29 @@ export default function Signup({ onRegister, t, language }) {
         <p className="signup-description">{t("signup.description")}</p>
 
         <div className="signup-wallet">
-          <ConnectButton connectText={t("signup.wallet.connect")} />
+          <button
+            type="button"
+            className="signup-wallet__google"
+            disabled={!googleWallet || isConnecting}
+            onClick={() => {
+              if (!googleWallet) {
+                setError(t("signup.wallet.unavailable"));
+                return;
+              }
+              connect({ wallet: googleWallet });
+            }}
+          >
+            {googleWallet?.icon ? (
+              <img
+                src={googleWallet.icon}
+                alt="Google"
+                className="signup-wallet__google-icon"
+              />
+            ) : (
+              <span className="signup-wallet__google-placeholder">G</span>
+            )}
+            <span>{t("signup.wallet.google")}</span>
+          </button>
           {currentAccount && (
             <p className="signup-wallet__status">
               {t("signup.wallet.connected", {
@@ -77,12 +107,12 @@ export default function Signup({ onRegister, t, language }) {
         </div>
 
         <form className="signup-form" onSubmit={handleSubmit}>
-          {/* <input
+          <input
             type="text"
             value={nickname}
             onChange={(event) => setNickname(event.target.value)}
             placeholder={t("signup.nicknamePlaceholder")}
-          /> */}
+          />
           {error && <p className="signup-error">{error}</p>}
           <button type="submit" disabled={!currentAccount}>
             {t("signup.button.label")}

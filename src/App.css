@@ -584,6 +584,70 @@
   background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(120, 138, 255, 0.35) 50%, rgba(255, 255, 255, 0) 100%);
 }
 
+.signup-wallet {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.signup-wallet__google {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0.65em 1.6em;
+  border: none;
+  border-radius: 18px;
+  background: linear-gradient(140deg, #706dff, #9a63ff);
+  color: #fff;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  box-shadow: 0 12px 32px rgba(96, 88, 255, 0.45);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.signup-wallet__google:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 38px rgba(96, 88, 255, 0.55);
+}
+
+.signup-wallet__google:active:not(:disabled) {
+  transform: translateY(0);
+  opacity: 0.9;
+}
+
+.signup-wallet__google:disabled {
+  cursor: default;
+  opacity: 0.55;
+  box-shadow: none;
+}
+
+.signup-wallet__google-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #fff;
+  padding: 4px;
+}
+
+.signup-wallet__google-placeholder {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #fff;
+  color: #4285f4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.signup-wallet__status {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
 .signup-form {
   width: 100%;
   display: flex;

@@ -190,6 +190,8 @@ const translations = {
       "✅ 동일 종족 2마리 합성 → 새로운 DNA + 능력치 강화",
     "signup.wallet.connect": "지갑 연결하기",
     "signup.wallet.connected": "연결된 지갑: {{address}}",
+    "signup.wallet.google": "Google로 로그인",
+    "signup.wallet.unavailable": "지금은 Google 로그인 옵션을 불러올 수 없습니다.",
   },
   en: {
     "app.brand": "Blockmon Battle Prototype",
@@ -381,6 +383,8 @@ const translations = {
     "signup.bullet.fusion": "✅ Fuse identical species to unlock stronger DNA",
     "signup.wallet.connect": "Connect wallet",
     "signup.wallet.connected": "Connected wallet: {{address}}",
+    "signup.wallet.google": "Sign in with Google",
+    "signup.wallet.unavailable": "Unable to load the Google login option right now.",
   },
 };
 
