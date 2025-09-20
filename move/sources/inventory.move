@@ -29,21 +29,21 @@ public struct BMToken has key, store {
 
 /// BM 토큰 이벤트들
 public struct BMTokenMinted has copy, drop, store {
-    owner: address,
+    owner_address: address,
     token_id: address,
     amount: u64,
     token_type: String,
 }
 
 public struct BMTokenUpdated has copy, drop, store {
-    owner: address,
+    owner_address: address,
     token_id: address,
     old_amount: u64,
     new_amount: u64,
 }
 
 public struct BMTokenBurned has copy, drop, store {
-    owner: address,
+    owner_address: address,
     token_id: address,
     amount: u64,
 }
@@ -61,7 +61,7 @@ public struct Potion has key, store {
 
 /// 포션 이벤트들
 public struct PotionMinted has copy, drop, store {
-    owner: address,
+    owner_address: address,
     potion_id: address,
     potion_type: String,
     effect_value: u64,
@@ -69,14 +69,14 @@ public struct PotionMinted has copy, drop, store {
 }
 
 public struct PotionUpdated has copy, drop, store {
-    owner: address,
+    owner_address: address,
     potion_id: address,
     old_quantity: u64,
     new_quantity: u64,
 }
 
 public struct PotionUsed has copy, drop, store {
-    owner: address,
+    owner_address: address,
     potion_id: address,
     potion_type: String,
     effect_value: u64,
@@ -84,7 +84,7 @@ public struct PotionUsed has copy, drop, store {
 }
 
 public struct PotionBurned has copy, drop, store {
-    owner: address,
+    owner_address: address,
     potion_id: address,
     potion_type: String,
     quantity: u64,
@@ -110,12 +110,12 @@ public struct PotionKey has copy, drop, store { kind: u8 }
 
 /// Events for Inventory bag operations
 public struct InventoryCreated has copy, drop, store {
-    owner: address,
+    owner_address: address,
     inventory_id: address,
 }
 
 public struct PotionAddedOrUpdatedInBag has copy, drop, store {
-    owner: address,
+    owner_address: address,
     inventory_id: address,
     potion_kind: u8,
     effect_value: u64,
@@ -124,7 +124,7 @@ public struct PotionAddedOrUpdatedInBag has copy, drop, store {
 }
 
 public struct PotionUsedFromBag has copy, drop, store {
-    owner: address,
+    owner_address: address,
     inventory_id: address,
     potion_kind: u8,
     effect_value: u64,
@@ -140,7 +140,7 @@ public fun create_inventory(ctx: &mut TxContext): Inventory {
     let owner = tx_context::sender(ctx);
     let inv = Inventory { id: object::new(ctx), bag: bag::new(ctx) };
     let inv_addr = object::uid_to_address(&inv.id);
-    event::emit(InventoryCreated { owner, inventory_id: inv_addr });
+    event::emit(InventoryCreated { owner_address: owner, inventory_id: inv_addr });
     inv
 }
 
@@ -164,7 +164,7 @@ public fun add_potion_to_inventory(
         entry.effect_value = effect_value;
         entry.description = description;
         event::emit(PotionAddedOrUpdatedInBag {
-            owner,
+            owner_address: owner,
             inventory_id: inv_addr,
             potion_kind,
             effect_value,
@@ -175,7 +175,7 @@ public fun add_potion_to_inventory(
         let new_entry = PotionEntry { effect_value, quantity: quantity_to_add, description };
         bag::add<PotionKey, PotionEntry>(&mut inv.bag, k, new_entry);
         event::emit(PotionAddedOrUpdatedInBag {
-            owner,
+            owner_address: owner,
             inventory_id: inv_addr,
             potion_kind,
             effect_value,
@@ -204,7 +204,7 @@ public fun use_potions_from_inventory(
         entry.quantity = entry.quantity - quantity_to_use;
         _remaining = entry.quantity;
         event::emit(PotionUsedFromBag {
-            owner,
+            owner_address: owner,
             inventory_id: inv_addr,
             potion_kind,
             effect_value: entry.effect_value,
@@ -259,7 +259,7 @@ public fun create_bm_token(
     
     let token_id = object::uid_to_address(&bm_token.id);
     event::emit(BMTokenMinted {
-        owner,
+        owner_address: owner,
         token_id,
         amount,
         token_type,
@@ -281,7 +281,7 @@ public fun add_bm_tokens(
     bm_token.amount = bm_token.amount + amount_to_add;
     
     event::emit(BMTokenUpdated {
-        owner,
+        owner_address: owner,
         token_id,
         old_amount,
         new_amount: bm_token.amount,
@@ -302,7 +302,7 @@ public fun subtract_bm_tokens(
     bm_token.amount = bm_token.amount - amount_to_subtract;
     
     event::emit(BMTokenUpdated {
-        owner,
+        owner_address: owner,
         token_id,
         old_amount,
         new_amount: bm_token.amount,
@@ -342,7 +342,7 @@ public fun burn_bm_token(bm_token: BMToken, ctx: &mut TxContext) {
     let BMToken { id, amount: _, token_type: _ } = bm_token;
     
     event::emit(BMTokenBurned {
-        owner,
+        owner_address: owner,
         token_id,
         amount,
     });
@@ -371,7 +371,7 @@ public fun create_potion(
     
     let potion_id = object::uid_to_address(&potion.id);
     event::emit(PotionMinted {
-        owner,
+        owner_address: owner,
         potion_id,
         potion_type,
         effect_value,
@@ -394,7 +394,7 @@ public fun add_potions(
     potion.quantity = potion.quantity + quantity_to_add;
     
     event::emit(PotionUpdated {
-        owner,
+        owner_address: owner,
         potion_id,
         old_quantity,
         new_quantity: potion.quantity,
@@ -415,7 +415,7 @@ public fun use_potion(
     potion.quantity = potion.quantity - quantity_to_use;
     
     event::emit(PotionUsed {
-        owner,
+        owner_address: owner,
         potion_id,
         potion_type: potion.potion_type,
         effect_value: potion.effect_value,
@@ -469,7 +469,7 @@ public fun burn_potion(potion: Potion, ctx: &mut TxContext) {
     let Potion { id, potion_type: _, effect_value: _, quantity: _, description: _ } = potion;
     
     event::emit(PotionBurned {
-        owner,
+        owner_address: owner,
         potion_id,
         potion_type,
         quantity,

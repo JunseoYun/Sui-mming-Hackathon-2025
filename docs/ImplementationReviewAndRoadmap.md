@@ -106,8 +106,8 @@
 - [ ] Devnet e2e 파이프라인 추가(해커톤 범위: 선택/생략)
 - [x] 인벤토리 Dynamic Fields/Bag 도입
 - [x] create_many 도입 또는 PTB 최적화
-- [ ] Display/Kiosk/TransferPolicy 연계
-- [ ] 이벤트 스키마 표준화와 문서화
+- [ ] Display/Kiosk/TransferPolicy 연계 (Deferred - 해커톤 범위 외: NFT Display 메타데이터/마켓 제외)
+- [x] 이벤트 스키마 표준화와 문서화
 
 ## KPIs (Post-Refactor)
 - 평균 가스 사용: 캡처/민팅/정산 트랜잭션별 가스 비용(중앙값/95p).

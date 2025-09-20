@@ -36,13 +36,13 @@ public struct MonSkill has store, drop {
 }
 
 public struct Minted has copy, drop, store {
-  owner: address,
-  mon: address,
+  owner_address: address,
+  mon_id: address,
 }
 
 public struct BattleRecorded has copy, drop, store {
-  player: address,
-  mon: address,
+  player_address: address,
+  mon_id: address,
   opponent: String,
   won: bool,
   player_remaining_hp: u64,
@@ -50,8 +50,8 @@ public struct BattleRecorded has copy, drop, store {
 }
 
 public struct Burned has copy, drop, store {
-  owner: address,
-  mon: address,
+  owner_address: address,
+  mon_id: address,
 }
 
 const E_ARG_LENGTH_MISMATCH: u64 = 100;
@@ -92,7 +92,7 @@ public fun create_block_mon(
   };
   let owner = tx_context::sender(ctx);
   let mon_addr = object::uid_to_address(&block_mon.id);
-  event::emit(Minted { owner, mon: mon_addr });
+  event::emit(Minted { owner_address: owner, mon_id: mon_addr });
   block_mon
 }
 
@@ -106,7 +106,7 @@ public fun record_battle(
 ) {
   let player = tx_context::sender(ctx);
   let mon_addr = object::uid_to_address(&mon.id);
-  event::emit(BattleRecorded { player, mon: mon_addr, opponent, won, player_remaining_hp, opponent_remaining_hp });
+  event::emit(BattleRecorded { player_address: player, mon_id: mon_addr, opponent, won, player_remaining_hp, opponent_remaining_hp });
 }
 
 // --------- READ (getters) ---------
@@ -149,7 +149,7 @@ public fun burn(mon: BlockMon, ctx: &mut TxContext) {
   let owner = tx_context::sender(ctx);
   let mon_addr = object::uid_to_address(&mon.id);
   let BlockMon { id, mon_id: _, name: _, base: _, skill: _ } = mon;
-  event::emit(Burned { owner, mon: mon_addr });
+  event::emit(Burned { owner_address: owner, mon_id: mon_addr });
   object::delete(id);
 }
 
