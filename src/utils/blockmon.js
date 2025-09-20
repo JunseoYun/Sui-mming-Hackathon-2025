@@ -1,5 +1,11 @@
 import { Transaction } from "@mysten/sui.js/transactions";
 import { SuiClient } from "@mysten/sui.js/client";
+import {
+  detectSigningStrategy,
+  createEnvKeypairFromEnv,
+  buildEnvKeyExecutor,
+  buildWalletExecutor,
+} from "./signer";
 
 // Configuration helpers
 function getEnvPackageId() {
@@ -23,12 +29,49 @@ function fn(pkg, name) {
 // Generic execute helper
 // executor should be a function compatible with dapp-kit useSignAndExecuteTransaction
 // e.g. (tx) => signAndExecute({ transaction: tx, options: { showEffects: true, showObjectChanges: true, showEvents: true } })
-export async function executeTransaction({ tx, executor }) {
-  if (typeof executor !== "function") {
-    throw new Error("executor is required (e.g., from useSignAndExecuteTransaction)");
+export async function executeTransaction({ tx, executor, client, signAndExecute }) {
+  let effectiveExecutor = executor;
+
+  if (typeof effectiveExecutor !== "function") {
+    const strategy = detectSigningStrategy();
+    if (strategy === "env-key") {
+      if (!(client instanceof SuiClient)) {
+        throw new Error("SuiClient instance is required to sign with env-key strategy");
+      }
+      const keypair = createEnvKeypairFromEnv();
+      if (!keypair) {
+        throw new Error("No env keypair found. Set VITE_SUI_DEV_MNEMONIC or VITE_SUI_DEV_PRIVATE_KEY");
+      }
+      effectiveExecutor = buildEnvKeyExecutor({ client, keypair });
+    } else {
+      if (typeof signAndExecute !== "function") {
+        throw new Error("signAndExecute function is required for wallet strategy");
+      }
+      effectiveExecutor = buildWalletExecutor(signAndExecute);
+    }
   }
-  const result = await executor(tx);
+
+  const result = await effectiveExecutor(tx);
   return result;
+}
+
+export function ensureExecutor({ executor, client, signAndExecute }) {
+  if (typeof executor === "function") return executor;
+  const strategy = detectSigningStrategy();
+  if (strategy === "env-key") {
+    if (!(client instanceof SuiClient)) {
+      throw new Error("SuiClient instance is required to sign with env-key strategy");
+    }
+    const keypair = createEnvKeypairFromEnv();
+    if (!keypair) {
+      throw new Error("No env keypair found. Set VITE_SUI_DEV_MNEMONIC or VITE_SUI_DEV_PRIVATE_KEY");
+    }
+    return buildEnvKeyExecutor({ client, keypair });
+  }
+  if (typeof signAndExecute !== "function") {
+    throw new Error("signAndExecute function is required for wallet strategy");
+  }
+  return buildWalletExecutor(signAndExecute);
 }
 
 // Helper to extract created object id by type
@@ -203,6 +246,8 @@ export async function createBlockMon({
   cha,
   skillName,
   skillDescription,
+  client,
+  signAndExecute,
 }) {
   const tx = buildCreateBlockMonTx({
     packageId,
@@ -219,28 +264,28 @@ export async function createBlockMon({
     skillName,
     skillDescription,
   });
-  const res = await executeTransaction({ tx, executor });
+  const res = await executeTransaction({ tx, executor, client, signAndExecute });
   return res;
 }
 
-export async function updateStats({ executor, packageId, blockmonId, stats }) {
+export async function updateStats({ executor, packageId, blockmonId, stats, client, signAndExecute }) {
   const tx = buildSetStatsTx({ packageId, blockmonId, stats });
-  return executeTransaction({ tx, executor });
+  return executeTransaction({ tx, executor, client, signAndExecute });
 }
 
-export async function updateName({ executor, packageId, blockmonId, name }) {
+export async function updateName({ executor, packageId, blockmonId, name, client, signAndExecute }) {
   const tx = buildSetNameTx({ packageId, blockmonId, name });
-  return executeTransaction({ tx, executor });
+  return executeTransaction({ tx, executor, client, signAndExecute });
 }
 
-export async function updateMonId({ executor, packageId, blockmonId, monId }) {
+export async function updateMonId({ executor, packageId, blockmonId, monId, client, signAndExecute }) {
   const tx = buildSetMonIdTx({ packageId, blockmonId, monId });
-  return executeTransaction({ tx, executor });
+  return executeTransaction({ tx, executor, client, signAndExecute });
 }
 
-export async function updateSkill({ executor, packageId, blockmonId, skillName, skillDescription }) {
+export async function updateSkill({ executor, packageId, blockmonId, skillName, skillDescription, client, signAndExecute }) {
   const tx = buildSetSkillTx({ packageId, blockmonId, skillName, skillDescription });
-  return executeTransaction({ tx, executor });
+  return executeTransaction({ tx, executor, client, signAndExecute });
 }
 
 export async function recordBattle({
@@ -251,14 +296,16 @@ export async function recordBattle({
   won,
   playerRemainingHp,
   opponentRemainingHp,
+  client,
+  signAndExecute,
 }) {
   const tx = buildRecordBattleTx({ packageId, blockmonId, opponent, won, playerRemainingHp, opponentRemainingHp });
-  return executeTransaction({ tx, executor });
+  return executeTransaction({ tx, executor, client, signAndExecute });
 }
 
-export async function burn({ executor, packageId, blockmonId }) {
+export async function burn({ executor, packageId, blockmonId, client, signAndExecute }) {
   const tx = buildBurnTx({ packageId, blockmonId });
-  return executeTransaction({ tx, executor });
+  return executeTransaction({ tx, executor, client, signAndExecute });
 }
 
 // READ helpers

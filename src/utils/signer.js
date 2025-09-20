@@ -1,6 +1,6 @@
-import { SuiClient } from "@mysten/sui/client";
-import { Transaction } from "@mysten/sui/transactions";
-import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
+import { SuiClient } from "@mysten/sui.js/client";
+import { Transaction } from "@mysten/sui.js/transactions";
+import { Ed25519Keypair } from "@mysten/sui.js/keypairs/ed25519";
 
 function isHexString(input) {
   return typeof input === "string" && /^0x?[0-9a-fA-F]+$/.test(input);
