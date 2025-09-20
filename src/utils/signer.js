@@ -1,5 +1,5 @@
 import { SuiClient } from "@mysten/sui.js/client";
-import { Transaction } from "@mysten/sui.js/transactions";
+import { TransactionBlock } from "@mysten/sui.js/transactions";
 import { Ed25519Keypair } from "@mysten/sui.js/keypairs/ed25519";
 
 function isHexString(input) {
@@ -77,16 +77,15 @@ export function buildEnvKeyExecutor({ client, keypair }) {
     throw new Error("keypair is required for env-key executor");
   }
   return async (tx) => {
-    if (!(tx instanceof Transaction)) {
-      // Best-effort: allow different Transaction impls by reconstructing
-      const rebuilt = new Transaction();
-      rebuilt.deserialize(tx.serialize ? tx.serialize() : tx);
+    // 허용: 직렬화된 값 또는 타 구현 → TransactionBlock으로 복원
+    if (!(tx && typeof tx === "object" && typeof tx.setSenderIfNotSet === "function")) {
+      const rebuilt = typeof tx === "string" ? TransactionBlock.from(tx) : TransactionBlock.from(tx);
       tx = rebuilt;
     }
     tx.setSenderIfNotSet(getAddressFromKeypair(keypair));
-    return client.signAndExecuteTransaction({
+    return client.signAndExecuteTransactionBlock({
       signer: keypair,
-      transaction: tx,
+      transactionBlock: tx,
       options: { showEffects: true, showObjectChanges: true, showEvents: true },
     });
   };

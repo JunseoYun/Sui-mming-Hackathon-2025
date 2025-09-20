@@ -1,4 +1,4 @@
-import { Transaction } from "@mysten/sui.js/transactions";
+import { TransactionBlock } from "@mysten/sui.js/transactions";
 import { SuiClient } from "@mysten/sui.js/client";
 import {
   detectSigningStrategy,
@@ -100,7 +100,7 @@ export function buildCreateBlockMonTx({
 }) {
   const pkg = resolvePackageId(packageId);
   if (!sender) throw new Error("sender address is required to transfer the newly created BlockMon");
-  const tx = new Transaction();
+  const tx = new TransactionBlock();
 
   const created = tx.moveCall({
     target: fn(pkg, "createBlockMon"),
@@ -126,7 +126,7 @@ export function buildCreateBlockMonTx({
 // Build: setters (mutations)
 export function buildSetNameTx({ packageId, blockmonId, name }) {
   const pkg = resolvePackageId(packageId);
-  const tx = new Transaction();
+  const tx = new TransactionBlock();
   tx.moveCall({
     target: fn(pkg, "set_name"),
     arguments: [tx.object(blockmonId), tx.pure.string(name)],
@@ -136,7 +136,7 @@ export function buildSetNameTx({ packageId, blockmonId, name }) {
 
 export function buildSetMonIdTx({ packageId, blockmonId, monId }) {
   const pkg = resolvePackageId(packageId);
-  const tx = new Transaction();
+  const tx = new TransactionBlock();
   tx.moveCall({
     target: fn(pkg, "set_mon_id"),
     arguments: [tx.object(blockmonId), tx.pure.string(monId)],
@@ -147,7 +147,7 @@ export function buildSetMonIdTx({ packageId, blockmonId, monId }) {
 export function buildSetBaseTx({ packageId, blockmonId, base }) {
   const { hp, str, dex, con, int, wis, cha } = base || {};
   const pkg = resolvePackageId(packageId);
-  const tx = new Transaction();
+  const tx = new TransactionBlock();
   // set_base takes a MonStat struct; we use set_stats which accepts scalars for convenience
   tx.moveCall({
     target: fn(pkg, "set_stats"),
@@ -167,7 +167,7 @@ export function buildSetBaseTx({ packageId, blockmonId, base }) {
 
 export function buildSetSkillTx({ packageId, blockmonId, skillName, skillDescription }) {
   const pkg = resolvePackageId(packageId);
-  const tx = new Transaction();
+  const tx = new TransactionBlock();
   tx.moveCall({
     target: fn(pkg, "set_skill"),
     arguments: [tx.object(blockmonId), tx.pure.string(skillName), tx.pure.string(skillDescription)],
@@ -178,7 +178,7 @@ export function buildSetSkillTx({ packageId, blockmonId, skillName, skillDescrip
 export function buildSetStatsTx({ packageId, blockmonId, stats }) {
   const { hp, str, dex, con, int, wis, cha } = stats || {};
   const pkg = resolvePackageId(packageId);
-  const tx = new Transaction();
+  const tx = new TransactionBlock();
   tx.moveCall({
     target: fn(pkg, "set_stats"),
     arguments: [
