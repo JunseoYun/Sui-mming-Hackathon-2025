@@ -88,7 +88,17 @@ export default function Home({ gameState, actions }) {
   };
 
   const launchAdventure = (potionCount) => {
-    const result = actions.startAdventure(selectedTeam, potionCount);
+    const maxCarry = Math.min(potions, teamSize);
+    const normalized = Number.isFinite(Number(potionCount)) ? Math.trunc(Number(potionCount)) : NaN;
+    if (!Number.isFinite(normalized) || normalized < 0) {
+      setError(t('errors.invalidAmount'));
+      return;
+    }
+    if (normalized > maxCarry) {
+      setError(t('errors.amountOutOfRange'));
+      return;
+    }
+    const result = actions.startAdventure(selectedTeam, normalized);
     if (result?.error) {
       setError(result.error);
       return;

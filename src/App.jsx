@@ -1562,14 +1562,27 @@ function GameApp() {
     setAdventureSelection,
     setPvpSelection,
     setLanguage,
-    purchaseTokens: (amount) => inventoryService.purchaseTokens(amount),
+    purchaseTokens: (amount) => {
+      const normalized = Number.isFinite(Number(amount)) ? Math.trunc(Number(amount)) : NaN;
+      if (!Number.isFinite(normalized) || normalized <= 0) {
+        setSystemMessage({ key: 'errors.invalidAmount' });
+        return { error: 'invalid amount' };
+      }
+      return inventoryService.purchaseTokens(normalized);
+    },
     purchasePotions: async (amount, cost) => {
       if (purchasingPotion) return { error: 'busy' };
-      if (tokens < cost) {
+      const amountNormalized = Number.isFinite(Number(amount)) ? Math.trunc(Number(amount)) : NaN;
+      const costNormalized = Number.isFinite(Number(cost)) ? Math.trunc(Number(cost)) : NaN;
+      if (!Number.isFinite(amountNormalized) || amountNormalized <= 0 || !Number.isFinite(costNormalized) || costNormalized < 0) {
+        setSystemMessage({ key: 'errors.invalidAmount' });
+        return { error: 'invalid amount' };
+      }
+      if (tokens < costNormalized) {
         setSystemMessage({ key: 'inventory.potionError' });
         return { error: "insufficient tokens" };
       }
-      return inventoryService.purchasePotions(amount, cost);
+      return inventoryService.purchasePotions(amountNormalized, costNormalized);
     },
     toggleChainLog: () => uiService.toggleChainLog(),
     clearChainLog: () => uiService.clearChainLog(),

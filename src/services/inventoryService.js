@@ -28,6 +28,11 @@ export function createInventoryService({
   executor,
 }) {
   const purchaseTokens = async (amount) => {
+    const normalized = Number.isFinite(Number(amount)) ? Math.trunc(Number(amount)) : NaN;
+    if (!Number.isFinite(normalized) || normalized <= 0) {
+      setSystemMessage?.({ key: 'errors.invalidAmount' });
+      return { error: 'invalid amount' };
+    }
     const owner = signing.address ?? currentAccount?.address ?? null;
     if (!owner) return;
     const pkg = resolvePackageId();
@@ -38,15 +43,21 @@ export function createInventoryService({
       bmTokenId = first?.data?.objectId ?? first?.objectId ?? null;
     } catch (_) {}
     if (bmTokenId) {
-      await queueAndRetry('inventory.addBMTokens', async () => onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount, client }), { attempts: 4, baseDelayMs: 500 });
+      await queueAndRetry('inventory.addBMTokens', async () => onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount: normalized, client }), { attempts: 4, baseDelayMs: 500 });
     } else {
-      await queueAndRetry('inventory.createBMToken', async () => onchainCreateBMToken({ executor, packageId: pkg, sender: owner, amount, tokenType: 'BM', client }), { attempts: 4, baseDelayMs: 500 });
+      await queueAndRetry('inventory.createBMToken', async () => onchainCreateBMToken({ executor, packageId: pkg, sender: owner, amount: normalized, tokenType: 'BM', client }), { attempts: 4, baseDelayMs: 500 });
     }
     const total = await getTotalBMTokenBalance(client, owner, pkg);
     if (Number.isFinite(total)) setTokens(total);
   };
 
   const purchasePotions = async (amount, cost) => {
+    const amountNormalized = Number.isFinite(Number(amount)) ? Math.trunc(Number(amount)) : NaN;
+    const costNormalized = Number.isFinite(Number(cost)) ? Math.trunc(Number(cost)) : NaN;
+    if (!Number.isFinite(amountNormalized) || amountNormalized <= 0 || !Number.isFinite(costNormalized) || costNormalized < 0) {
+      setSystemMessage?.({ key: 'errors.invalidAmount' });
+      return { error: 'invalid amount' };
+    }
     if (setPurchasingPotion) setPurchasingPotion(true);
     const owner = signing.address ?? currentAccount?.address ?? null;
     try {
@@ -71,12 +82,12 @@ export function createInventoryService({
 
         const tx = new TransactionBlock();
         if (bmTokenId) {
-          tx.moveCall({ target: `${pkg}::inventory::subtract_bm_tokens`, arguments: [tx.object(bmTokenId), tx.pure.u64(cost)] });
+          tx.moveCall({ target: `${pkg}::inventory::subtract_bm_tokens`, arguments: [tx.object(bmTokenId), tx.pure.u64(costNormalized)] });
         }
         if (potionId) {
-          tx.moveCall({ target: `${pkg}::inventory::add_potions`, arguments: [tx.object(potionId), tx.pure.u64(amount)] });
+          tx.moveCall({ target: `${pkg}::inventory::add_potions`, arguments: [tx.object(potionId), tx.pure.u64(amountNormalized)] });
         } else {
-          const created = tx.moveCall({ target: `${pkg}::inventory::create_potion`, arguments: [tx.pure.string('HP'), tx.pure.u64(9999), tx.pure.u64(amount), tx.pure.string('HP Potion')] });
+          const created = tx.moveCall({ target: `${pkg}::inventory::create_potion`, arguments: [tx.pure.string('HP'), tx.pure.u64(9999), tx.pure.u64(amountNormalized), tx.pure.string('HP Potion')] });
           tx.transferObjects([created], tx.pure.address(owner));
         }
         const res = await queueAndRetry('inventory.purchasePotions', async () => executor(tx), { attempts: 4, baseDelayMs: 500 });
@@ -89,7 +100,7 @@ export function createInventoryService({
 
         try {
           let total = await getTotalPotionCountByType(client, owner, pkg, 'HP');
-          const expected = Number(beforeTotal ?? 0) + Number(amount ?? 0);
+          const expected = Number(beforeTotal ?? 0) + Number(amountNormalized ?? 0);
           for (let i = 0; i < 5 && Number.isFinite(expected) && total < expected; i++) {
             await new Promise((r) => setTimeout(r, 400));
             total = await getTotalPotionCountByType(client, owner, pkg, 'HP');
@@ -99,7 +110,7 @@ export function createInventoryService({
           if (Number.isFinite(bmTotal)) setTokens(bmTotal);
         } catch (_) {}
       }
-      setSystemMessage?.({ key: 'inventory.potionConfirm', params: { amount } });
+      setSystemMessage?.({ key: 'inventory.potionConfirm', params: { amount: amountNormalized } });
       setPurchasingPotion?.(false);
       return { success: true };
     } finally {
