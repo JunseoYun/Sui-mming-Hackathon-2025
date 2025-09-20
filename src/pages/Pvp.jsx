@@ -1,12 +1,14 @@
 import React, { useMemo, useState } from 'react'
 import BattleLog from '../components/BattleLog'
+import BlockmonCard from '../components/BlockmonCard'
 import { translateSpecies } from '../i18n'
 
 export default function Pvp({ gameState, actions }) {
-  const { blockmons, tokens, pvpHistory, language, t } = gameState
+  const { blockmons, tokens, pvpHistory, pvpSelection, language, t } = gameState
   const [error, setError] = useState('')
 
   const latest = useMemo(() => (pvpHistory.length ? pvpHistory[pvpHistory.length - 1] : null), [pvpHistory])
+  const selectedTeam = pvpSelection ?? []
 
   const handleMatch = () => {
     const result = actions.runPvpMatch()
@@ -15,6 +17,20 @@ export default function Pvp({ gameState, actions }) {
     } else {
       setError('')
     }
+  }
+
+  const toggleMember = (blockmon) => {
+    setError('')
+    const alreadySelected = selectedTeam.includes(blockmon.id)
+    if (alreadySelected) {
+      actions.setPvpSelection(selectedTeam.filter((id) => id !== blockmon.id))
+      return
+    }
+    if (selectedTeam.length >= 4) {
+      setError(t('pvp.error.selectTeam'))
+      return
+    }
+    actions.setPvpSelection([...selectedTeam, blockmon.id])
   }
 
   const primaryBlockmon = blockmons[0]
@@ -61,6 +77,23 @@ export default function Pvp({ gameState, actions }) {
           ) : (
             <p>{t('pvp.card.recentNone')}</p>
           )}
+        </div>
+      </section>
+
+      <section className="pvp__selection">
+        <h2>{t('pvp.selection.title')}</h2>
+        <div className="blockmon-grid">
+          {blockmons.map((blockmon) => (
+            <BlockmonCard
+              key={blockmon.id}
+              blockmon={blockmon}
+              selectable
+              isSelected={selectedTeam.includes(blockmon.id)}
+              onSelect={toggleMember}
+              language={language}
+              t={t}
+            />
+          ))}
         </div>
       </section>
 

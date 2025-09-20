@@ -43,6 +43,26 @@
   border-color: transparent;
 }
 
+.app__language {
+  display: flex;
+  gap: 8px;
+}
+
+.app__language button {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 0.35em 0.9em;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.app__language button.is-active {
+  background: linear-gradient(135deg, #6f74ff, #8c4dff);
+  border-color: transparent;
+  color: #fff;
+}
+
 .app__content {
   flex: 1;
   overflow: auto;
@@ -113,42 +133,6 @@
   background: linear-gradient(135deg, #6f74ff, #8c4dff);
   border-color: transparent;
   color: #fff;
-}
-
-.home__purchase {
-  margin: 16px 0 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  align-items: flex-start;
-}
-
-.home__purchase > button {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-}
-
-.home__purchase-panel {
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 14px;
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.home__purchase-options {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 8px;
-}
-
-.home__purchase-options button {
-  background: linear-gradient(135deg, #5b6bff, #8a5fff);
-  border: none;
-  padding: 0.5em 0.8em;
-  font-size: 0.85rem;
 }
 
 .home__team-summary {
@@ -409,6 +393,12 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.pvp__selection {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
 .fusion__cost {
   color: rgba(255, 255, 255, 0.7);
 }
@@ -474,6 +464,36 @@
   font-size: 0.85rem;
 }
 
+.inventory__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.inventory__panel {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.inventory__options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.inventory__options button {
+  background: linear-gradient(135deg, #5b6bff, #8a5fff);
+  border: none;
+  padding: 0.6em 0.8em;
+  font-size: 0.85rem;
+}
+
 .signup-screen {
   flex: 1;
   display: flex;
@@ -516,26 +536,6 @@
 .signup-tagline {
   color: rgba(199, 214, 255, 0.75);
   font-size: 0.85rem;
-}
-
-.signup-language {
-  display: flex;
-  gap: 10px;
-}
-
-.signup-language button {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 999px;
-  padding: 0.4em 0.9em;
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.signup-language button.is-active {
-  background: linear-gradient(135deg, #6f74ff, #8c4dff);
-  border-color: transparent;
-  color: #fff;
 }
 
 .signup-description {

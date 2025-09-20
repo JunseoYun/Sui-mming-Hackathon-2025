@@ -50,7 +50,7 @@ export default function Adventure({ gameState, actions }) {
             {t('home.activeAdventure.summary', {
               active: adventure.team.filter((member) => !member.knockedOut).length,
               total: adventure.team.length,
-              potions: adventure.potions,
+              potions: adventure.potionsRemaining ?? adventure.potionsCarried ?? 0,
               spent: adventure.tokensSpent,
               captured: adventure.capturedCount ?? 0
             })}

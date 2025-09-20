@@ -7,6 +7,7 @@ export default function BlockmonCard({ blockmon, onSelect, selectable = false, i
   const originLabel = origin ? t('blockmon.origin', { value: translateOrigin(origin, language) }) : null
   const temperamentLabel = temperament ? t('blockmon.temperament', { value: translateTemperament(temperament, language) }) : null
   const powerLabel = power ? t('blockmon.powerLabel') : null
+  const displayName = language === 'en' ? speciesLabel || name : name
 
   return (
     <div
@@ -18,7 +19,7 @@ export default function BlockmonCard({ blockmon, onSelect, selectable = false, i
         <span className="blockmon-card__dna">DNA #{dna}</span>
       </div>
       <div className="blockmon-card__title">
-        <h3 className="blockmon-card__name">{name}</h3>
+        <h3 className="blockmon-card__name">{displayName}</h3>
         {rank && <span className="blockmon-card__rank">{rank}</span>}
       </div>
       <div className="blockmon-card__hp">HP {hp}</div>

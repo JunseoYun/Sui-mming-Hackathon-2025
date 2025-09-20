@@ -27,12 +27,12 @@ import './App.css'
 import './index.css'
 
 const pages = {
-  home: { labelKey: 'nav.home', component: Home },
-  adventure: { labelKey: 'nav.adventure', component: Adventure },
-  battle: { labelKey: 'nav.battle', component: Battle },
-  fusion: { labelKey: 'nav.fusion', component: Fusion },
-  pvp: { labelKey: 'nav.pvp', component: Pvp },
-  inventory: { labelKey: 'nav.inventory', component: Inventory }
+  home: { labelKey: 'nav.home', component: Home, showInNav: true },
+  adventure: { labelKey: 'nav.adventure', component: Adventure, showInNav: true },
+  battle: { labelKey: 'nav.battle', component: Battle, showInNav: false },
+  fusion: { labelKey: 'nav.fusion', component: Fusion, showInNav: true },
+  pvp: { labelKey: 'nav.pvp', component: Pvp, showInNav: true },
+  inventory: { labelKey: 'nav.inventory', component: Inventory, showInNav: true }
 }
 
 function formatLogTime(language, offsetMinutes = 0) {
@@ -94,6 +94,8 @@ function App() {
   const [currentPage, setCurrentPage] = useState('home')
   const [systemMessage, setSystemMessage] = useState('')
   const [adventureSelection, setAdventureSelection] = useState([])
+  const [pvpSelection, setPvpSelection] = useState([])
+  const [potions, setPotions] = useState(2)
   const [language, setLanguage] = useState('ko')
 
   const t = (key, params) => translate(language, key, params)
@@ -116,6 +118,8 @@ function App() {
     setTokens(10)
     setBlockmons([starter])
     setAdventureSelection([starter.id])
+    setPvpSelection([starter.id])
+    setPotions(2)
     setDnaVault([
       {
         dna: starter.dna,
@@ -159,10 +163,21 @@ function App() {
     if (selectedIds.length !== team.length) {
       setAdventureSelection(team.map((mon) => mon.id))
     }
+    let potionsToCarry = 0
+    if (potions > 0) {
+      const input = window.prompt(
+        `${t('inventory.potions')}\n${t('inventory.potionStock', { value: potions })}`,
+        Math.min(potions, 2).toString()
+      )
+      const desired = parseInt(input ?? '0', 10)
+      if (!Number.isNaN(desired) && desired > 0) {
+        potionsToCarry = Math.min(desired, potions)
+      }
+    }
+
     const seed = generateSeed()
     const seedHex = formatSeed(seed)
     const startedAt = new Date()
-    const potions = Math.min(4, Math.max(1, Math.floor(team.reduce((acc, mon) => acc + mon.stats.con, 0) / 40)))
 
     const teamRecords = team.map((mon) => ({
       id: mon.id,
@@ -170,6 +185,7 @@ function App() {
       species: mon.species,
       name: mon.name,
       remainingHp: mon.hp,
+      maxHp: mon.maxHp ?? mon.hp,
       knockedOut: false
     }))
 
@@ -179,8 +195,14 @@ function App() {
     let defeats = 0
     let tokensEarned = 0
     let offset = 1
+    let potionsRemaining = potionsToCarry
+    let potionsUsed = 0
 
     appendSeed(seedHex, 'Adventure Start')
+
+    if (potionsToCarry > 0) {
+      setPotions((prev) => prev - potionsToCarry)
+    }
 
     while (teamRecords.some((member) => !member.knockedOut)) {
       const activeMember = teamRecords.find((member) => !member.knockedOut)
@@ -218,11 +240,34 @@ function App() {
       let battleEntryLog = [encounterEntry, ...battleLogEntries]
       logs = [...logs, ...battleEntryLog]
 
-      const reward = result.outcome === 'win' ? 2 : 0
-      tokensEarned += reward
+      const reward = 0
       defeats += result.outcome === 'win' ? 0 : 1
       activeMember.remainingHp = result.remainingHp
       activeMember.knockedOut = result.outcome !== 'win'
+      const memberMaxHp = activeMember.maxHp ?? playerMon.maxHp ?? playerMon.hp
+
+      if (
+        result.outcome === 'win' &&
+        !activeMember.knockedOut &&
+        potionsRemaining > 0 &&
+        activeMember.remainingHp < memberMaxHp * 0.5
+      ) {
+        potionsRemaining -= 1
+        potionsUsed += 1
+        activeMember.remainingHp = memberMaxHp
+        const potionEntry = {
+          time: formatLogTime(language, offset++),
+          message: t('adventure.log.potion', {
+            name:
+              language === 'en'
+                ? translateSpecies(activeMember.species, language)
+                : activeMember.name
+          }),
+          actorType: 'player'
+        }
+        logs.push(potionEntry)
+        battleEntryLog = [...battleEntryLog, potionEntry]
+      }
 
       if (result.outcome === 'win') {
         const captured = {
@@ -243,8 +288,8 @@ function App() {
       appendSeed(battleSeedHex, `Wild Battle #${battleRecords.length + 1}`)
 
       const completedAt = new Date().toISOString()
-      const playerSnapshot = { ...playerMon, hp: result.remainingHp }
-      const opponentSnapshot = { ...wild, hp: result.opponentRemainingHp }
+      const playerSnapshot = { ...playerMon, hp: result.remainingHp, maxHp: playerMon.maxHp ?? playerMon.hp }
+      const opponentSnapshot = { ...wild, hp: result.opponentRemainingHp, maxHp: wild.maxHp ?? wild.hp }
 
       battleRecords.push({
         id: `battle-${battleSeedHex}`,
@@ -274,7 +319,14 @@ function App() {
       tokensEarned,
       defeats,
       battles: battleRecords.length,
-      capturedCount: capturedMonsters.length
+      capturedCount: capturedMonsters.length,
+      potionsCarried: potionsToCarry,
+      potionsRemaining,
+      potionsUsed
+    }
+
+    if (potionsRemaining > 0) {
+      setPotions((prev) => prev + potionsRemaining)
     }
 
     if (capturedMonsters.length) {
@@ -330,6 +382,7 @@ function App() {
       newborn
     ])
     setAdventureSelection((prev) => prev.filter((id) => id !== firstId && id !== secondId))
+    setPvpSelection((prev) => prev.filter((id) => id !== firstId && id !== secondId))
     setDnaVault((prev) => [
       ...prev.filter((entry) => entry.seed !== (first.seed ?? first.id) && entry.seed !== (second.seed ?? second.id)),
       {
@@ -363,7 +416,36 @@ function App() {
     if (!blockmons.length) return { error: t('errors.noBlockmonPvp') }
     if (tokens < 3) return { error: t('errors.noTokensPvp') }
 
-    const contender = blockmons[0]
+    const selectedIds = (pvpSelection.length ? pvpSelection : blockmons.slice(0, 4).map((mon) => mon.id)).slice(0, 4)
+    const team = selectedIds
+      .map((id) => blockmons.find((mon) => mon.id === id))
+      .filter(Boolean)
+
+    if (team.length < 4) {
+      return { error: t('pvp.error.selectTeam') }
+    }
+
+    const combinedStats = team.reduce((acc, mon) => {
+      Object.keys(mon.stats).forEach((key) => {
+        acc[key] = (acc[key] ?? 0) + mon.stats[key]
+      })
+      return acc
+    }, {})
+
+    const averagedStats = Object.fromEntries(
+      Object.entries(combinedStats).map(([key, value]) => [key, Math.max(1, Math.round(value / team.length))])
+    )
+
+    const teamMaxHp = team.reduce((sum, mon) => sum + (mon.maxHp ?? mon.hp), 0)
+    const contender = {
+      id: `pvp-team-${Date.now()}`,
+      name: language === 'en' ? 'My Squad' : '내 팀',
+      species: language === 'en' ? 'Squad' : '팀',
+      stats: averagedStats,
+      hp: teamMaxHp,
+      maxHp: teamMaxHp
+    }
+
     const opponentSeed = generateSeed()
     const opponent = createBlockmonFromSeed(opponentSeed, { origin: 'PVP 상대' })
     const result = rollBattleOutcome(contender, opponent, opponentSeed)
@@ -388,7 +470,7 @@ function App() {
 
     const record = {
       id: `pvp-${formatSeed(opponentSeed)}`,
-      player: contender,
+      player: { ...contender, members: team.map((mon) => ({ id: mon.id, name: mon.name, species: mon.species })) },
       opponent,
       outcome: result.outcome,
       logs,
@@ -419,6 +501,8 @@ function App() {
       pvpHistory,
       systemMessage,
       adventureSelection,
+      pvpSelection,
+      potions,
       language,
       t
     }),
@@ -435,6 +519,8 @@ function App() {
       pvpHistory,
       systemMessage,
       adventureSelection,
+      pvpSelection,
+      potions,
       language,
       t
     ]
@@ -447,26 +533,29 @@ function App() {
     runPvpMatch,
     registerUser,
     setAdventureSelection,
+    setPvpSelection,
     setLanguage,
-    purchaseTokens
+    purchaseTokens,
+    purchasePotions: (amount, cost) => {
+      if (tokens < cost) {
+        setSystemMessage(t('inventory.potionError'))
+        return { error: 'insufficient tokens' }
+      }
+      setTokens((prev) => prev - cost)
+      setPotions((prev) => prev + amount)
+      setSystemMessage(t('inventory.potionConfirm', { amount }))
+      return { success: true }
+    }
   }
 
-  if (!player) {
-    return (
-      <div className="app">
-        <Signup onRegister={registerUser} language={language} t={t} setLanguage={setLanguage} />
-      </div>
-    )
-  }
+  const navItems = Object.entries(pages).filter(([, page]) => page.showInNav !== false)
 
-  const CurrentComponent = pages[currentPage]?.component ?? Home
-
-  return (
-    <div className="app">
-      <header className="app__top">
-        <span className="app__brand">{t('app.brand')}</span>
+  const header = (
+    <header className="app__top">
+      <span className="app__brand">{t('app.brand')}</span>
+      {player && (
         <nav className="app__nav">
-          {Object.entries(pages).map(([key, { labelKey }]) => (
+          {navItems.map(([key, { labelKey }]) => (
             <button
               key={key}
               className={currentPage === key ? 'is-active' : ''}
@@ -476,7 +565,34 @@ function App() {
             </button>
           ))}
         </nav>
-      </header>
+      )}
+      <div className="app__language">
+        <button className={language === 'ko' ? 'is-active' : ''} onClick={() => setLanguage('ko')}>
+          {t('home.language.korean')}
+        </button>
+        <button className={language === 'en' ? 'is-active' : ''} onClick={() => setLanguage('en')}>
+          {t('home.language.english')}
+        </button>
+      </div>
+    </header>
+  )
+
+  if (!player) {
+    return (
+      <div className="app signup-app">
+        {header}
+        <main className="app__content">
+          <Signup onRegister={registerUser} language={language} t={t} />
+        </main>
+      </div>
+    )
+  }
+
+  const CurrentComponent = pages[currentPage]?.component ?? Home
+
+  return (
+    <div className="app">
+      {header}
 
       {systemMessage && <div className="app__notice">{systemMessage}</div>}
 

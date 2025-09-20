@@ -6,7 +6,7 @@ export default function TokenBalance({ tokens, dnaCount, activeCount, seedCount,
     <div className="token-balance">
       <div>
         <span className="token-balance__label">{t('token.bm')}</span>
-        <span className="token-balance__value">{tokens.toLocaleString(locale)}</span>
+        <span className="token-balance__value">{tokens.toLocaleString(locale)} BM</span>
       </div>
       <div>
         <span className="token-balance__label">{t('token.dna')}</span>

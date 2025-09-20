@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 
-export default function Signup({ onRegister, language = 'ko', t, setLanguage }) {
+export default function Signup({ onRegister, t }) {
   const [nickname, setNickname] = useState('')
   const [error, setError] = useState('')
 
@@ -23,15 +23,6 @@ export default function Signup({ onRegister, language = 'ko', t, setLanguage }) 
           <div className="signup-title">{t('signup.title')}</div>
           <p className="signup-subtitle">{t('signup.subtitle')}</p>
           <p className="signup-tagline">{t('signup.tagline')}</p>
-        </div>
-
-        <div className="signup-language">
-          <button className={language === 'ko' ? 'is-active' : ''} onClick={() => setLanguage('ko')}>
-            {t('home.language.korean')}
-          </button>
-          <button className={language === 'en' ? 'is-active' : ''} onClick={() => setLanguage('en')}>
-            {t('home.language.english')}
-          </button>
         </div>
 
         <div className="signup-icon">
