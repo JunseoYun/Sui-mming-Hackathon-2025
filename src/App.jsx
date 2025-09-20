@@ -298,9 +298,10 @@ function GameApp() {
           setPvpSelection((prev) => (prev?.length ? prev : all.slice(0, 4).map((m) => m.id)));
 
           // 최초 접속 시 보유 블록몬이 없다면, 가입 시 생성한 스타터 시드로 1마리 자동 민트
-          if (all.length === 0 && !starterAttempted && player?.starterSeed) {
+          if (all.length === 0 && !starterAttempted && (player?.starterSeed || true)) {
             try {
-              const base = createBlockmonFromSeed(BigInt(`0x${player.starterSeed}`), { origin: '스타터' });
+              const seedHex = player?.starterSeed ?? formatSeed(generateSeed());
+              const base = createBlockmonFromSeed(BigInt(`0x${seedHex}`), { origin: '스타터' });
               const species = speciesCatalog.find((s) => s.name === base.species);
               const monId = species?.id ?? base.species;
               const res = await onchainCreateBlockMon({
@@ -331,17 +332,27 @@ function GameApp() {
                     setBlockmons([mapped]);
                     setAdventureSelection([mapped.id]);
                     setPvpSelection([mapped.id]);
+                    setStarterAttempted(true);
+                    if (!player?.starterSeed) {
+                      setPlayer((prev) => (prev ? { ...prev, starterSeed: seedHex } : prev));
+                    }
                   } else {
                     setBlockmons([{ ...base, id: objectId, onchain: true }]);
+                    setStarterAttempted(true);
+                    if (!player?.starterSeed) {
+                      setPlayer((prev) => (prev ? { ...prev, starterSeed: seedHex } : prev));
+                    }
                   }
                 } catch (e) {
                   setBlockmons([{ ...base, id: objectId, onchain: true }]);
+                  setStarterAttempted(true);
+                  if (!player?.starterSeed) {
+                    setPlayer((prev) => (prev ? { ...prev, starterSeed: seedHex } : prev));
+                  }
                 }
               }
             } catch (e) {
               console.error('[Onchain] starter mint failed', e);
-            } finally {
-              setStarterAttempted(true);
             }
           }
         }
