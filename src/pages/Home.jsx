@@ -9,7 +9,6 @@ export default function Home({ gameState, actions }) {
     tokens,
     potions,
     blockmons,
-    dnaVault,
     seedHistory,
     adventure,
     adventureSelection,
@@ -19,6 +18,7 @@ export default function Home({ gameState, actions }) {
 
   const [error, setError] = useState('')
   const [showPotionChooser, setShowPotionChooser] = useState(false)
+  const [sortKey, setSortKey] = useState('default')
   const selectedTeam = adventureSelection ?? []
   const teamSize = selectedTeam.length
 
@@ -30,10 +30,34 @@ export default function Home({ gameState, actions }) {
     [selectedTeam, blockmons],
   )
 
+  const getLocalizedName = (blockmon) => {
+    if (language !== 'en') {
+      return blockmon.name
+    }
+    const rawName = blockmon.name ?? ''
+    const [base, suffix] = rawName.split('-', 2)
+    const translatedBase =
+      translateSpecies(base, language) || translateSpecies(blockmon.species, language)
+    if (!suffix) {
+      return translatedBase
+    }
+    return `${translatedBase}-${suffix}`
+  }
+
   const potionOptions = useMemo(() => {
     const maxCarry = Math.min(potions, teamSize)
     return Array.from({ length: maxCarry + 1 }, (_, count) => count)
   }, [potions, teamSize])
+
+  const sortedBlockmons = useMemo(() => {
+    if (sortKey === 'strong') {
+      return [...blockmons].sort((a, b) => (b.power ?? 0) - (a.power ?? 0))
+    }
+    if (sortKey === 'weak') {
+      return [...blockmons].sort((a, b) => (a.power ?? 0) - (b.power ?? 0))
+    }
+    return blockmons
+  }, [blockmons, sortKey])
 
   const handleStartAdventure = () => {
     setError('')
@@ -119,20 +143,66 @@ export default function Home({ gameState, actions }) {
 
       <TokenBalance
         tokens={tokens}
-        dnaCount={dnaVault.length}
-        activeCount={blockmons.length}
         seedCount={seedHistory.length}
         potionCount={potions}
         t={t}
         language={language}
       />
 
+      <div className="actions home__primary-actions">
+        <button onClick={handleStartAdventure} disabled={teamSize === 0 || tokens < 1}>
+          {t('home.actions.startAdventure')}
+        </button>
+        <button onClick={() => actions.navigate('fusion')}>
+          {t('home.actions.dnaFusion')}
+        </button>
+        <button onClick={() => actions.navigate('pvp')}>
+          {t('home.actions.pvp')}
+        </button>
+        <button onClick={() => actions.navigate('inventory')}>
+          {t('home.actions.inventory')}
+        </button>
+      </div>
+
       <section>
         <h2>{t('home.section.blockmons')}</h2>
+        {selectedBlockmons.length > 0 && (
+          <div className="home__team-summary">
+            <span>{t('home.selection.summaryLead', { count: selectedBlockmons.length })}</span>
+            {selectedBlockmons.map((blockmon, index) => (
+              <span key={blockmon.id}>
+                {index + 1}. {getLocalizedName(blockmon)} · {translateSpecies(blockmon.species, language)}
+              </span>
+            ))}
+          </div>
+        )}
         {blockmons.length === 0 && <p>{t('home.noBlockmons')}</p>}
         {blockmons.length > 0 && (
           <div className="home__team-toolbar">
             <span>{t('home.selectedCount', { count: teamSize })}</span>
+            <div className="home__sort-buttons">
+              <button
+                type="button"
+                className={sortKey === 'default' ? 'is-active' : ''}
+                onClick={() => setSortKey('default')}
+              >
+                {t('home.sort.default')}
+              </button>
+              <button
+                type="button"
+                className={sortKey === 'strong' ? 'is-active' : ''}
+                onClick={() => setSortKey('strong')}
+              >
+                {t('home.sort.strong')}
+              </button>
+              <button
+                type="button"
+                className={sortKey === 'weak' ? 'is-active' : ''}
+                onClick={() => setSortKey('weak')}
+              >
+                {t('home.sort.weak')}
+              </button>
+            </div>
             <button
               onClick={handleClearSelection}
               disabled={teamSize === 0}
@@ -144,7 +214,7 @@ export default function Home({ gameState, actions }) {
         )}
         {blockmons.length > 0 && (
           <div className="blockmon-grid">
-            {blockmons.map((blockmon) => {
+            {sortedBlockmons.map((blockmon) => {
               const selectedIndex = selectedTeam.indexOf(blockmon.id)
               return (
                 <BlockmonCard
@@ -161,28 +231,9 @@ export default function Home({ gameState, actions }) {
             })}
           </div>
         )}
-        {selectedBlockmons.length > 0 && (
-          <div className="home__team-summary">
-            <span>{t('home.selection.summaryLead', { count: selectedBlockmons.length })}</span>
-            {selectedBlockmons.map((blockmon, index) => (
-              <span key={blockmon.id}>
-                {index + 1}. {blockmon.name} · {translateSpecies(blockmon.species, language)}
-              </span>
-            ))}
-          </div>
-        )}
       </section>
 
       {error && <p className="page__error">{error}</p>}
-
-      <section className="actions">
-        <button onClick={handleStartAdventure} disabled={teamSize === 0 || tokens < 1}>
-          {t('home.actions.startAdventure')}
-        </button>
-        <button onClick={() => actions.navigate('fusion')}>{t('home.actions.dnaFusion')}</button>
-        <button onClick={() => actions.navigate('pvp')}>{t('home.actions.pvp')}</button>
-        <button onClick={() => actions.navigate('inventory')}>{t('home.actions.inventory')}</button>
-      </section>
 
       {showPotionChooser && (
         <div className="home__overlay" role="dialog" aria-modal="true">

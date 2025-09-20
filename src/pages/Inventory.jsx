@@ -1,12 +1,9 @@
 import React, { useState } from 'react'
-import { translateSpecies, translateNote, translateEntityStatus } from '../i18n'
 
 export default function Inventory({ gameState, actions }) {
   const {
     tokens,
     potions,
-    blockmons,
-    dnaVault,
     language,
     t
   } = gameState
@@ -25,7 +22,6 @@ export default function Inventory({ gameState, actions }) {
     <div className="page page--inventory">
       <header className="page__header">
         <h1>{t('inventory.title')}</h1>
-        <p className="page__subtitle">{t('inventory.subtitle')}</p>
       </header>
 
       <section className="inventory__section">
@@ -81,33 +77,6 @@ export default function Inventory({ gameState, actions }) {
         </div>
       </section>
 
-      <section className="inventory__section">
-        <h2>{t('inventory.section.dna')}</h2>
-        <div className="inventory__list">
-          {dnaVault.map((entry) => (
-            <div key={entry.seed} className="inventory__card">
-              <h3>{translateSpecies(entry.species, language)}</h3>
-              <p>DNA: {entry.dna}</p>
-              <p>{translateEntityStatus(entry.status, language)}</p>
-              <p>{translateNote(entry.note, language)}</p>
-            </div>
-          ))}
-          {dnaVault.length === 0 && <p>{t('inventory.empty.dna')}</p>}
-        </div>
-      </section>
-
-      <section className="inventory__section">
-        <h2>{t('inventory.section.active')}</h2>
-        <ul className="inventory__list inventory__list--simple">
-          {blockmons.map((blockmon) => (
-            <li key={blockmon.id}>
-              {language === 'en' ? translateSpecies(blockmon.species, language) : blockmon.name} ·
-              {t('blockmon.powerLabel')} {blockmon.power}
-            </li>
-          ))}
-          {!blockmons.length && <li>{t('inventory.empty.blockmon')}</li>}
-        </ul>
-      </section>
     </div>
   )
 }

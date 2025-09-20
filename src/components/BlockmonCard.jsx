@@ -1,5 +1,5 @@
 import React from 'react'
-import { translateSpecies, translateTemperament } from '../i18n'
+import { translateSpecies } from '../i18n'
 
 export default function BlockmonCard({
   blockmon,
@@ -10,9 +10,8 @@ export default function BlockmonCard({
   language = 'ko',
   t = () => '',
 }) {
-  const { name, dna, species, hp, stats, rank, temperament, power, skill } = blockmon
+  const { name, dna, species, hp, stats, rank, power, skill } = blockmon
   const speciesLabel = translateSpecies(species, language)
-  const temperamentLabel = temperament ? t('blockmon.temperament', { value: translateTemperament(temperament, language) }) : null
   const powerLabel = power ? t('blockmon.powerLabel') : null
   const displayName = language === 'en' ? speciesLabel || name : name
   const skillName = skill ? t(skill.name) : ''
@@ -34,7 +33,6 @@ export default function BlockmonCard({
       </div>
       <div className="blockmon-card__hp">HP {hp}</div>
       {power && powerLabel && <div className="blockmon-card__power">{powerLabel} {power}</div>}
-      {temperamentLabel && <div className="blockmon-card__temperament">{temperamentLabel}</div>}
       <ul className="blockmon-card__stats">
         <li>STR {stats.str}</li>
         <li>DEX {stats.dex}</li>

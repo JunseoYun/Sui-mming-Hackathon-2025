@@ -11,6 +11,7 @@ import {
   generateSeed,
   rollBattleOutcome,
   formatSeed,
+  evaluateFusionRecipe,
 } from "./utils/random";
 import {
   translate,
@@ -546,18 +547,59 @@ function GameApp() {
       return { error: t('errors.sameSpeciesFusion') };
     }
 
-    const tokenCost = Math.max(1, uniqueIds.length - 1);
+    const { cost: tokenCost, successChance } = evaluateFusionRecipe(parents);
+    const chancePercent = Math.round(successChance * 100);
     if (tokens < tokenCost) {
       return { error: t('fusion.error.cost', { cost: tokenCost }) };
     }
 
     const fusionSeed = generateSeed();
+    setTokens((prev) => prev - tokenCost);
+    const successRoll = Math.random();
+    if (successRoll > successChance) {
+      const dominant = parents.reduce((best, current) => {
+        const bestPower = best?.power ?? -Infinity;
+        return (current.power ?? 0) > bestPower ? current : best;
+      }, parents[0]);
+      const survivors = new Set([dominant.id]);
+      const consumedIds = new Set(
+        parents.filter((parent) => !survivors.has(parent.id)).map((parent) => parent.id),
+      );
+      const consumedSeeds = new Set(
+        parents
+          .filter((parent) => !survivors.has(parent.id))
+          .map((parent) => parent.seed ?? parent.id),
+      );
+
+      if (consumedIds.size > 0) {
+        setBlockmons((prev) => prev.filter((mon) => !consumedIds.has(mon.id)));
+        setAdventureSelection((prev) => prev.filter((id) => !consumedIds.has(id)));
+        setPvpSelection((prev) => prev.filter((id) => !consumedIds.has(id)));
+        setDnaVault((prev) => prev.filter((entry) => !consumedSeeds.has(entry.seed)));
+      }
+
+      const failureRecord = {
+        id: `fusion-fail-${formatSeed(fusionSeed)}`,
+        result: null,
+        parents: parents.map((parent) => ({ ...parent })),
+        createdAt: new Date().toISOString(),
+        tokensSpent: tokenCost,
+        success: false,
+        successChance,
+      };
+      setFusionHistory((prev) => [...prev, failureRecord]);
+      setSystemMessage(t('system.fusionFailed', { chance: chancePercent }));
+      if (typeof window !== 'undefined') {
+        window.alert(t('fusion.alert.failure', { chance: chancePercent }));
+      }
+      return { error: t('fusion.error.failure', { chance: chancePercent }) };
+    }
+
     const newborn = fuseBlockmons(parents, fusionSeed);
 
     const parentIdSet = new Set(uniqueIds);
     const parentSeedSet = new Set(parents.map((parent) => parent.seed ?? parent.id));
 
-    setTokens((prev) => prev - tokenCost);
     setBlockmons((prev) => [
       ...prev.filter((mon) => !parentIdSet.has(mon.id)),
       newborn,
@@ -583,6 +625,8 @@ function GameApp() {
       parents: parents.map((parent) => ({ ...parent })),
       createdAt: new Date().toISOString(),
       tokensSpent: tokenCost,
+      success: true,
+      successChance,
     };
     setFusionHistory((prev) => [...prev, record]);
     setSystemMessage(t('system.fusionCreated'));

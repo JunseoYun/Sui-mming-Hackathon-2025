@@ -6,6 +6,8 @@ const translations = {
       "모험 완료! 전투 {{battles}}회, 포획 {{captured}}마리, 보상 +{{tokens}} BM",
     "system.fusionCreated":
       "새로운 블록몬이 탄생했습니다! 인벤토리에서 확인하세요.",
+    "system.fusionFailed":
+      "합성이 실패했습니다. 예상 성공 확률 {{chance}}%였습니다.",
     "system.pvpWin": "PVP 매치에서 승리했습니다! (순이익 +1 BM)",
     "system.pvpLose": "PVP 매치에서 패배했습니다. 배팅 토큰 3 BM을 잃었습니다.",
     "errors.noBlockmon": "보유한 블록몬이 없습니다.",
@@ -25,6 +27,9 @@ const translations = {
       "아직 보유한 블록몬이 없습니다. DNA를 합성하거나 모험에서 확보하세요.",
     "home.selectedCount": "선택된 팀: {{count}} / 4",
     "home.clearSelection": "선택 초기화",
+    "home.sort.default": "기본순",
+    "home.sort.strong": "강한순",
+    "home.sort.weak": "약한순",
     "home.selection.summaryLead": "선택된 블록몬 {{count}}마리",
     "home.selection.extraNotice":
       "※ 합성 시 선택한 모든 블록몬이 사용됩니다.",
@@ -143,6 +148,7 @@ const translations = {
     "fusion.quickSelect.button": "{{species}} ({{count}}마리)",
     "fusion.cost.summary":
       "선택 {{count}}마리 · 합성 비용 {{cost}} BM (보유 {{tokens}} BM)",
+    "fusion.successChance": "예상 성공 확률 {{chance}}%",
     "fusion.preview.title": "예상 결과",
     "fusion.result.title": "선택된 블록몬",
     "fusion.button.execute": "DNA 합성 실행",
@@ -151,10 +157,12 @@ const translations = {
     "fusion.error.selectTwo": "같은 종족의 블록몬을 두 마리 이상 선택해주세요.",
     "fusion.error.sameSpecies": "같은 종족만 합성할 수 있습니다.",
     "fusion.error.cost": "합성 비용 {{cost}} BM이 필요합니다.",
+    "fusion.error.failure": "합성이 불안정하여 실패했습니다. (성공 확률 {{chance}}%)",
     "fusion.result.message":
       "{{name}}이(가) 합성되었습니다! 인벤토리에서 확인하세요.",
     "fusion.alert.title": "{{name}} 탄생!",
     "fusion.alert.dna": "DNA: {{dna}}",
+    "fusion.alert.failure": "합성이 실패했습니다. (성공 확률 {{chance}}%)",
     "pvp.title": "PVP 매칭",
     "pvp.subtitle":
       "3 BM 토큰을 배팅하여 다른 수호자와 전투하세요. 승리 시 5 BM 획득, 1 BM 수수료 차감.",
@@ -177,12 +185,9 @@ const translations = {
     "pvp.card.recentNet": "순이익: {{value}} BM",
     "pvp.actions.match": "PVP 배틀 매칭 (3 BM)",
     "pvp.actions.home": "홈으로",
-    "inventory.title": "인벤토리 & 진행 상황",
-    "inventory.subtitle": "DNA, 시드, 배틀 이력을 한눈에 확인하세요.",
+    "inventory.title": "인벤토리",
     "inventory.section.dna": "보유 DNA",
     "inventory.empty.dna": "DNA가 아직 없습니다.",
-    "inventory.section.active": "활성 블록몬",
-    "inventory.empty.blockmon": "보유한 블록몬이 없습니다.",
     "inventory.section.seed": "랜덤 시드 기록",
     "inventory.empty.seed": "아직 시드 기록이 없습니다.",
     "inventory.section.adventure": "모험 상태",
@@ -241,6 +246,8 @@ const translations = {
       "Adventure complete! Battles {{battles}}, captured {{captured}}, reward +{{tokens}} BM",
     "system.fusionCreated":
       "A new Blockmon has been born! Check your inventory.",
+    "system.fusionFailed":
+      "Fusion failed. Your success chance was {{chance}}%.",
     "system.pvpWin": "PVP match won! (Net gain +1 BM)",
     "system.pvpLose": "PVP match lost. You forfeited 3 BM.",
     "errors.noBlockmon": "No Blockmon owned.",
@@ -260,6 +267,9 @@ const translations = {
       "No Blockmon yet. Fuse DNA or capture them during adventures.",
     "home.selectedCount": "Selected team: {{count}} / 4",
     "home.clearSelection": "Clear selection",
+    "home.sort.default": "Default",
+    "home.sort.strong": "Power ↓",
+    "home.sort.weak": "Power ↑",
     "home.selection.summaryLead": "{{count}} Blockmon selected",
     "home.selection.extraNotice":
       "All selected Blockmon will be used for fusion.",
@@ -379,6 +389,7 @@ const translations = {
     "fusion.quickSelect.button": "{{species}} ({{count}})",
     "fusion.cost.summary":
       "Selected {{count}} · Cost {{cost}} BM (You have {{tokens}} BM)",
+    "fusion.successChance": "Estimated success chance {{chance}}%",
     "fusion.preview.title": "Projected Result",
     "fusion.result.title": "Selected Blockmon",
     "fusion.button.execute": "Execute DNA Fusion",
@@ -387,9 +398,11 @@ const translations = {
     "fusion.error.selectTwo": "Select at least two Blockmon of the same species.",
     "fusion.error.sameSpecies": "Only identical species can be fused.",
     "fusion.error.cost": "You need {{cost}} BM for this fusion.",
+    "fusion.error.failure": "Fusion destabilised and failed. (Success chance {{chance}}%)",
     "fusion.result.message": "{{name}} has been fused! Check your inventory.",
     "fusion.alert.title": "{{name}} is born!",
     "fusion.alert.dna": "DNA: {{dna}}",
+    "fusion.alert.failure": "Fusion failed. (Success chance {{chance}}%)",
     "pvp.title": "PVP Matchmaking",
     "pvp.subtitle":
       "Stake 3 BM tokens and battle another guardian. Win 5 BM with a 1 BM fee.",
@@ -412,12 +425,9 @@ const translations = {
     "pvp.card.recentNet": "Net: {{value}} BM",
     "pvp.actions.match": "Match PVP Battle (3 BM)",
     "pvp.actions.home": "Back to Home",
-    "inventory.title": "Inventory & Progress",
-    "inventory.subtitle": "Review DNA, seeds, and battle history at a glance.",
+    "inventory.title": "Inventory",
     "inventory.section.dna": "Stored DNA",
     "inventory.empty.dna": "No DNA stored yet.",
-    "inventory.section.active": "Active Blockmon",
-    "inventory.empty.blockmon": "No Blockmon owned.",
     "inventory.section.seed": "Seed Records",
     "inventory.empty.seed": "No seed records yet.",
     "inventory.section.adventure": "Adventure Status",

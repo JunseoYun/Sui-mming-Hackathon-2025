@@ -146,7 +146,6 @@ export function createBlockmonFromSeed(seed, options = {}) {
     stats,
     skill: species.skill,
     rank: rarity,
-    temperament: species.habitat,
     origin: options.origin ?? "야생 탄생",
     power: statSum + hp,
   };
@@ -215,12 +214,33 @@ export function fuseBlockmons(parents, seed) {
     stats,
     skill: baseSpecies.skill,
     rank: rarity,
-    temperament: "합성으로 각성한 유전자",
     origin: "합성 DNA",
     power: statSum + hp,
     parents: parents.map((p) => ({ id: p.id, dna: p.dna, species: p.species })),
     fusionCount: parents.length,
   };
+}
+
+export function evaluateFusionRecipe(parents) {
+  if (!Array.isArray(parents) || parents.length < 2) {
+    return { cost: 0, successChance: 0, dominantPower: 0 };
+  }
+
+  const dominant = parents.reduce((best, current) => {
+    const bestPower = best?.power ?? -Infinity;
+    return (current.power ?? 0) > bestPower ? current : best;
+  }, parents[0]);
+
+  const dominantPower = dominant?.power ?? 0;
+  const count = parents.length;
+  const baseCost = Math.max(1, count - 1);
+  const powerCost = Math.max(0, Math.floor(dominantPower / 120));
+  const cost = baseCost + powerCost;
+
+  const rawChance = 0.96 - dominantPower / 420 - (count - 2) * 0.06;
+  const successChance = Math.min(0.92, Math.max(0.18, rawChance));
+
+  return { cost, successChance, dominantPower };
 }
 
 export function rollBattleOutcome(player, opponent, seed, options = {}) {

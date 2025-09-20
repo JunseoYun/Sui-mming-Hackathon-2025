@@ -2,8 +2,6 @@ import React from 'react'
 
 export default function TokenBalance({
   tokens,
-  dnaCount,
-  activeCount,
   seedCount,
   potionCount = 0,
   t,
@@ -15,14 +13,6 @@ export default function TokenBalance({
       <div>
         <span className="token-balance__label">{t('token.bm')}</span>
         <span className="token-balance__value">{tokens.toLocaleString(locale)} BM</span>
-      </div>
-      <div>
-        <span className="token-balance__label">{t('token.dna')}</span>
-        <span className="token-balance__value">{dnaCount.toLocaleString(locale)}</span>
-      </div>
-      <div>
-        <span className="token-balance__label">{t('token.active')}</span>
-        <span className="token-balance__value">{activeCount.toLocaleString(locale)}</span>
       </div>
       <div>
         <span className="token-balance__label">{t('token.seed')}</span>
