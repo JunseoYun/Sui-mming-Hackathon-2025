@@ -151,12 +151,9 @@ export function buildSetBMTokenTypeTx({ packageId, bmTokenId, newType }) {
 
 // Build: transfer BM token ownership
 export function buildTransferBMTokenTx({ packageId, bmTokenId, newOwner }) {
-  const pkg = resolvePackageId(packageId);
+  resolvePackageId(packageId);
   const tx = new TransactionBlock();
-  tx.moveCall({
-    target: fn(pkg, "transfer_bm_token"),
-    arguments: [tx.object(bmTokenId), tx.pure.address(newOwner)],
-  });
+  tx.transferObjects([tx.object(bmTokenId)], tx.pure.address(newOwner));
   return tx;
 }
 
@@ -257,12 +254,9 @@ export function buildSetPotionDescriptionTx({ packageId, potionId, newDescriptio
 
 // Build: transfer potion ownership
 export function buildTransferPotionTx({ packageId, potionId, newOwner }) {
-  const pkg = resolvePackageId(packageId);
+  resolvePackageId(packageId);
   const tx = new TransactionBlock();
-  tx.moveCall({
-    target: fn(pkg, "transfer_potion"),
-    arguments: [tx.object(potionId), tx.pure.address(newOwner)],
-  });
+  tx.transferObjects([tx.object(potionId)], tx.pure.address(newOwner));
   return tx;
 }
 

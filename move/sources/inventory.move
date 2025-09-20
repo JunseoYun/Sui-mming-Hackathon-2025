@@ -19,7 +19,6 @@ public struct BM has drop {}
 /// BM 토큰 구조체
 public struct BMToken has key, store {
     id: UID,
-    owner: address,
     amount: u64,
     token_type: String, // "BM" for basic BM tokens
 }
@@ -50,7 +49,6 @@ public struct BMTokenBurned has copy, drop, store {
 /// 포션 구조체
 public struct Potion has key, store {
     id: UID,
-    owner: address,
     potion_type: String, // 현재는 "HP"만 사용 (HP 복원용)
     effect_value: u64,   // 포션의 효과 수치 (HP 복원량)
     quantity: u64,       // 포션 개수
@@ -99,7 +97,6 @@ public fun create_bm_token(
     let owner = tx_context::sender(ctx);
     let bm_token = BMToken {
         id: object::new(ctx),
-        owner,
         amount,
         token_type,
     };
@@ -161,9 +158,7 @@ public fun get_bm_token_address(bm_token: &BMToken): address {
     object::uid_to_address(&bm_token.id)
 }
 
-public fun get_bm_token_owner(bm_token: &BMToken): address {
-    bm_token.owner
-}
+// get_bm_token_owner removed: on-chain ownership must be inferred from object owner
 
 public fun get_bm_token_amount(bm_token: &BMToken): u64 {
     bm_token.amount
@@ -188,7 +183,7 @@ public fun burn_bm_token(bm_token: BMToken, ctx: &mut TxContext) {
     let token_id = object::uid_to_address(&bm_token.id);
     let amount = bm_token.amount;
     
-    let BMToken { id, owner: _, amount: _, token_type: _ } = bm_token;
+    let BMToken { id, amount: _, token_type: _ } = bm_token;
     
     event::emit(BMTokenBurned {
         owner,
@@ -212,7 +207,6 @@ public fun create_potion(
     let owner = tx_context::sender(ctx);
     let potion = Potion {
         id: object::new(ctx),
-        owner,
         potion_type,
         effect_value,
         quantity,
@@ -278,9 +272,7 @@ public fun get_potion_address(potion: &Potion): address {
     object::uid_to_address(&potion.id)
 }
 
-public fun get_potion_owner(potion: &Potion): address {
-    potion.owner
-}
+// get_potion_owner removed: on-chain ownership must be inferred from object owner
 
 public fun get_potion_type(potion: &Potion): &String {
     &potion.potion_type
@@ -318,7 +310,7 @@ public fun burn_potion(potion: Potion, ctx: &mut TxContext) {
     let potion_type = potion.potion_type;
     let quantity = potion.quantity;
     
-    let Potion { id, owner: _, potion_type: _, effect_value: _, quantity: _, description: _ } = potion;
+    let Potion { id, potion_type: _, effect_value: _, quantity: _, description: _ } = potion;
     
     event::emit(PotionBurned {
         owner,
@@ -332,30 +324,15 @@ public fun burn_potion(potion: Potion, ctx: &mut TxContext) {
 
 // ========== UTILITY FUNCTIONS ==========
 
-/// BM 토큰 잔액 확인
+// BM 토큰 잔액 확인
 public fun has_sufficient_bm_tokens(bm_token: &BMToken, required_amount: u64): bool {
     bm_token.amount >= required_amount
 }
 
-/// 포션 수량 확인
+// 포션 수량 확인
 public fun has_sufficient_potions(potion: &Potion, required_quantity: u64): bool {
     potion.quantity >= required_quantity
 }
 
-/// BM 토큰 전송 (소유권 변경)
-/// WARNING: 이 함수는 오직 `owner` 필드만 변경하며 실제 Sui 오브젝트 소유권을 이전하지 않습니다.
-/// - 트랜잭션에서 전송이 필요하면 PTB의 `tx.transferObjects([...], recipient)` 또는
-///   `sui::transfer::public_transfer`를 사용하세요.
-/// - 리팩토링(BM → Coin<BM>) 이후 제거 예정. 프런트엔드에서 호출 금지.
-public fun transfer_bm_token(bm_token: &mut BMToken, new_owner: address) {
-    bm_token.owner = new_owner;
-}
-
-/// 포션 전송 (소유권 변경)
-/// WARNING: 이 함수는 오직 `owner` 필드만 변경하며 실제 Sui 오브젝트 소유권을 이전하지 않습니다.
-/// - 트랜잭션에서 전송이 필요하면 PTB의 `tx.transferObjects([...], recipient)` 또는
-///   `sui::transfer::public_transfer`를 사용하세요.
-/// - 리팩토링(BM → Coin<BM>) 이후 제거 예정. 프런트엔드에서 호출 금지.
-public fun transfer_potion(potion: &mut Potion, new_owner: address) {
-    potion.owner = new_owner;
-}
+// 전송 유틸리티 제거됨: 실제 전송은 PTB `tx.transferObjects` 또는
+// `sui::transfer::public_transfer`를 사용하세요.

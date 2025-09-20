@@ -100,7 +100,7 @@
 - [x] [Now] 앱 시작 시 보류 큐(민트/번) 자동 플러시 추가
 - [x] [Now] README에 "Known Risks & Mitigations" 링크 노출
 - [x] BM → `Coin<BM>` 전환 및 관련 서비스 리팩토링
-- [ ] `owner` 필드/`transfer_*` 제거 및 실제 전송 로직 적용
+- [x] `owner` 필드/`transfer_*` 제거 및 실제 전송 로직 적용
 - [ ] `AdminCap/StoreCap` 설계/배포/검증 경로 추가
 - [ ] Move 네이밍 snake_case 및 에러 코드 상수화
 - [ ] Move 유닛 테스트/Devnet e2e 파이프라인 추가
