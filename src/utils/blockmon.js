@@ -341,3 +341,22 @@ export async function listBurnedEvents(client, packageId, cursor) {
 }
 
 
+// List: owned BlockMon objects by owner address (paginated)
+export async function listOwnedBlockMons(client, ownerAddress, packageId, cursor, limit = 50) {
+  if (!(client instanceof SuiClient)) {
+    throw new Error("client must be an instance of SuiClient");
+  }
+  if (!ownerAddress) {
+    throw new Error("ownerAddress is required");
+  }
+  const pkg = resolvePackageId(packageId);
+  const res = await client.getOwnedObjects({
+    owner: ownerAddress,
+    filter: { StructType: `${pkg}::blockmon::BlockMon` },
+    options: { showType: true, showContent: true, showOwner: true },
+    cursor,
+    limit,
+  });
+  return res;
+}
+
