@@ -32,6 +32,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { isEnokiNetwork, registerEnokiWallets } from "@mysten/enoki";
 import FusionFeedback from "./components/FusionFeedback";
+import ChainLog from "./components/ChainLog";
 import { getFullnodeUrl } from "@mysten/sui.js/client";
 import { TransactionBlock } from "@mysten/sui.js/transactions";
 import {
@@ -231,6 +232,7 @@ function GameApp() {
       return Array.isArray(arr) ? arr : [];
     } catch (_) { return []; }
   });
+  const [showChainLog, setShowChainLog] = useState(false);
 
   const { client, network } = useSuiClientContext();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
@@ -1665,6 +1667,11 @@ function GameApp() {
         setPurchasingPotion(false);
       }
     },
+    toggleChainLog: () => setShowChainLog((v) => !v),
+    clearChainLog: () => {
+      try { localStorage.setItem(CHAIN_LOG_KEY, JSON.stringify([])); } catch (_) {}
+      setChainLog([]);
+    },
   };
 
   const navItems = Object.entries(pages).filter(
@@ -1737,6 +1744,20 @@ function GameApp() {
       <main className="app__content">
         <CurrentComponent gameState={gameState} actions={actions} />
       </main>
+
+      <div style={{ position: 'fixed', right: 12, bottom: showChainLog ? 260 : 12, zIndex: 999 }}>
+        <button onClick={() => setShowChainLog((v) => !v)}>
+          {showChainLog ? 'Hide Chain Logs' : 'Show Chain Logs'}
+        </button>
+      </div>
+
+      {showChainLog && (
+        <ChainLog
+          entries={chainLog}
+          onClear={() => { try { localStorage.setItem(CHAIN_LOG_KEY, JSON.stringify([])); } catch (_) {}; setChainLog([]) }}
+          onClose={() => setShowChainLog(false)}
+        />
+      )}
     </div>
   );
 }
