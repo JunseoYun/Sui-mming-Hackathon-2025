@@ -60,21 +60,13 @@ export function createInventoryService({
     if (Number.isFinite(total)) setTokens(total);
   };
 
-  // Bag helpers (lazy import to avoid circular)
-  const bag = (() => {
-    const i = require('../utils/inventory');
-    return {
-      listOwnedInventories: i.listOwnedInventories,
-      buildCreateInventoryTx: i.buildCreateInventoryTx,
-      buildAddPotionToInventoryTx: i.buildAddPotionToInventoryTx,
-      buildUsePotionsFromInventoryTx: i.buildUsePotionsFromInventoryTx,
-      getInventoryStructTag: i.getInventoryStructTag,
-    };
-  })();
+  // Bag helpers (lazy dynamic import to avoid circular deps in browser ESM)
+  const loadInventoryModule = async () => await import('../utils/inventory');
 
   const ensureInventory = async (owner, pkg) => {
     try {
-      const res = await bag.listOwnedInventories(client, owner, pkg, null, 1);
+      const inv = await loadInventoryModule();
+      const res = await inv.listOwnedInventories(client, owner, pkg, null, 1);
       const first = (res?.data ?? [])[0];
       return first?.data?.objectId ?? first?.objectId ?? null;
     } catch (_) {
@@ -118,7 +110,8 @@ export function createInventoryService({
         // Ensure Inventory exists
         let inventoryId = await ensureInventory(owner, pkg);
         if (!inventoryId) {
-          const txCreate = bag.buildCreateInventoryTx({ packageId: pkg, sender: owner });
+          const inv = await loadInventoryModule();
+          const txCreate = inv.buildCreateInventoryTx({ packageId: pkg, sender: owner });
           const resCreate = await queueAndRetry('inventory.createInventory', async () => executor(txCreate), { attempts: 3, baseDelayMs: 400 });
           try {
             const digest = resCreate?.digest || resCreate?.effects?.transactionDigest || resCreate?.effectsDigest;
@@ -131,7 +124,8 @@ export function createInventoryService({
         }
 
         // Add potions to Inventory bag (HP kind=1, effect=9999 until balancing)
-        const tx = bag.buildAddPotionToInventoryTx({ packageId: pkg, inventoryId, potionType: 'HP', effectValue: 9999, quantity: amountNormalized, description: 'HP Potion' });
+        const inv = await loadInventoryModule();
+        const tx = inv.buildAddPotionToInventoryTx({ packageId: pkg, inventoryId, potionType: 'HP', effectValue: 9999, quantity: amountNormalized, description: 'HP Potion' });
         const res = await queueAndRetry('inventory.addPotionToInventory', async () => executor(tx), { attempts: 4, baseDelayMs: 500 });
         try {
           const digest = res?.digest || res?.effects?.transactionDigest || res?.effectsDigest;

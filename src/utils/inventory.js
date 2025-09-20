@@ -701,21 +701,7 @@ export async function hasSufficientPotions(client, potionId, requiredQuantity) {
   return currentQuantity >= requiredQuantity;
 }
 
-// Helper to get total BM token balance for a user
-export async function getTotalBMTokenBalance(client, ownerAddress, packageId) {
-  const ownedTokens = await listOwnedBMTokens(client, ownerAddress, packageId);
-  let totalBalance = 0;
-  
-  if (ownedTokens?.data) {
-    for (const token of ownedTokens.data) {
-      if (token?.data?.content?.fields?.amount) {
-        totalBalance += parseInt(token.data.content.fields.amount);
-      }
-    }
-  }
-  
-  return totalBalance;
-}
+// (removed) Duplicate legacy object-based balance helper; use getTotalBMCoinBalance instead
 
 // Helper to get total potion count by type for a user
 export async function getTotalPotionCountByType(client, ownerAddress, packageId, potionType = "HP") {
