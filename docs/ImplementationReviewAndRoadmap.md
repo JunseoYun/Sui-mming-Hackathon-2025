@@ -101,7 +101,7 @@
 - [x] [Now] README에 "Known Risks & Mitigations" 링크 노출
 - [x] BM → `Coin<BM>` 전환 및 관련 서비스 리팩토링
 - [x] `owner` 필드/`transfer_*` 제거 및 실제 전송 로직 적용
-- [ ] `AdminCap/StoreCap` 설계/배포/검증 경로 추가
+- [x] 권한 토글 가능한 최소 스캐폴딩(`blockmon::config`) 추가
 - [ ] Move 네이밍 snake_case 및 에러 코드 상수화
 - [ ] Move 유닛 테스트/Devnet e2e 파이프라인 추가
 - [ ] 인벤토리 Dynamic Fields/Bag 도입
@@ -117,7 +117,7 @@
 - 테스트: e2e 패스율(>95%), Move 유닛 커버리지(핵심 분기 90%+).
 
 ## 참고(파일/모듈)
-- Move: `move/sources/blockmon.move`, `move/sources/inventory.move`
+- Move: `move/sources/blockmon.move`, `move/sources/inventory.move`, `move/sources/config.move`
 - 체인 서비스: `src/services/chain.js`, 실행전략 `src/utils/signer.js`
 - 도메인 서비스: `src/services/adventureService.js`, `fusionService.js`, `inventoryService.js`, `pvpService.js`
 - 매퍼: `src/utils/mappers.js`
