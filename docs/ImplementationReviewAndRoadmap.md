@@ -105,7 +105,7 @@
 - [x] Move 유닛 테스트 추가(블록몬/인벤토리/컨피그, 이벤트/에러 검증)
 - [ ] Devnet e2e 파이프라인 추가(해커톤 범위: 선택/생략)
 - [x] 인벤토리 Dynamic Fields/Bag 도입
-- [ ] create_many 도입 또는 PTB 최적화
+- [x] create_many 도입 또는 PTB 최적화
 - [ ] Display/Kiosk/TransferPolicy 연계
 - [ ] 이벤트 스키마 표준화와 문서화
 
