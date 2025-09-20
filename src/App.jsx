@@ -76,6 +76,8 @@ import {
   removeBurnIdsFromQueue,
 } from "./services/chain";
 import { useTea, TeaMsg, initialModel } from "./state/tea";
+import { createUiService } from "./services/ui";
+import { createInventoryService } from "./services/inventoryService";
 
 // pages moved to routes/pages
 
@@ -571,12 +573,20 @@ function GameApp() {
     setCurrentPage("home");
   };
 
-  const navigate = (pageKey) => {
-    if (pages[pageKey]) {
-      setCurrentPage(pageKey);
-      setSystemMessage(null);
-    }
-  };
+  const uiService = useMemo(() => createUiService({
+    pages,
+    setCurrentPage,
+    setSystemMessage,
+    setLanguage,
+    setAdventureSelection,
+    setPvpSelection,
+    setShowChainLog: (v) => setShowChainLog(v),
+    getShowChainLog: () => showChainLog,
+    setChainLog,
+    CHAIN_LOG_KEY,
+  }), [pages, setCurrentPage, setSystemMessage, setLanguage, setAdventureSelection, setPvpSelection, showChainLog]);
+
+  const navigate = (pageKey) => uiService.navigate(pageKey);
 
   const startAdventure = (selectedIdsParam, potionsSelected = 0) => {
     if (!blockmons.length) return { error: t('errors.noBlockmon') };
@@ -1426,6 +1436,25 @@ function GameApp() {
     ]
   );
 
+  const inventoryService = useMemo(() => createInventoryService({
+    client,
+    resolvePackageId,
+    listOwnedBMTokens,
+    listOwnedPotions,
+    getTotalPotionCountByType,
+    getTotalBMTokenBalance,
+    onchainAddBMTokens,
+    onchainCreateBMToken,
+    onchainSubtractBMTokens,
+    setPotions,
+    setTokens,
+    setSystemMessage,
+    setPurchasingPotion,
+    signing,
+    currentAccount,
+    executor,
+  }), [client, resolvePackageId, signing, currentAccount?.address, executor]);
+
   const actions = {
     navigate,
     startAdventure,
@@ -1436,107 +1465,17 @@ function GameApp() {
     setAdventureSelection,
     setPvpSelection,
     setLanguage,
-    purchaseTokens,
+    purchaseTokens: (amount) => inventoryService.purchaseTokens(amount),
     purchasePotions: async (amount, cost) => {
       if (purchasingPotion) return { error: 'busy' };
       if (tokens < cost) {
         setSystemMessage({ key: 'inventory.potionError' });
         return { error: "insufficient tokens" };
       }
-      setPurchasingPotion(true);
-      // 온체인 반영 (비동기 실행)
-      const owner = signing.address ?? currentAccount?.address ?? null;
-      try {
-        if (owner) {
-          try {
-            const pkg = resolvePackageId();
-            // BM 차감 + 포션 add/create를 단일 트랜잭션으로 처리 (가스 코인 버전 충돌 회피)
-            const beforeTotal = await getTotalPotionCountByType(client, owner, pkg, 'HP');
-            let bmTokenId = null;
-            let potionId = null;
-            try {
-              const resBM = await listOwnedBMTokens(client, owner, pkg, null, 50);
-              const firstBM = (resBM?.data ?? [])[0];
-              bmTokenId = firstBM?.data?.objectId ?? firstBM?.objectId ?? null;
-            } catch (e) {
-              console.warn('[Onchain] listOwnedBMTokens failed', e);
-            }
-            try {
-              const res = await listOwnedPotions(client, owner, pkg, null, 50);
-              const hpEntry = (res?.data ?? []).find((item) => {
-                const fields = item?.data?.content?.fields ?? item?.content?.fields;
-                return fields?.potion_type === 'HP';
-              });
-              potionId = hpEntry?.data?.objectId ?? hpEntry?.objectId ?? null;
-            } catch (e) {
-              console.warn('[Onchain] listOwnedPotions failed', e);
-            }
-
-            const tx = new TransactionBlock();
-            if (bmTokenId) {
-              tx.moveCall({
-                target: `${pkg}::inventory::subtract_bm_tokens`,
-                arguments: [tx.object(bmTokenId), tx.pure.u64(cost)],
-              });
-            }
-            if (potionId) {
-              tx.moveCall({
-                target: `${pkg}::inventory::add_potions`,
-                arguments: [tx.object(potionId), tx.pure.u64(amount)],
-              });
-            } else {
-              const created = tx.moveCall({
-                target: `${pkg}::inventory::create_potion`,
-                arguments: [
-                  tx.pure.string('HP'),
-                  tx.pure.u64(9999),
-                  tx.pure.u64(amount),
-                  tx.pure.string('HP Potion'),
-                ],
-              });
-              tx.transferObjects([created], tx.pure.address(owner));
-            }
-            const res = await executor(tx);
-            try {
-              const digest = res?.digest || res?.effects?.transactionDigest || res?.effectsDigest;
-              if (digest && typeof client.waitForTransactionBlock === 'function') {
-                await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true } });
-              }
-            } catch (_) {}
-
-            // 체인 기준으로 동기화
-            try {
-              let total = await getTotalPotionCountByType(client, owner, pkg, 'HP');
-              const expected = Number(beforeTotal ?? 0) + Number(amount ?? 0);
-              // 최종성 전파 대기: 기대치에 도달할 때까지 짧게 재시도
-              for (let i = 0; i < 5 && Number.isFinite(expected) && total < expected; i++) {
-                await new Promise((r) => setTimeout(r, 400));
-                total = await getTotalPotionCountByType(client, owner, pkg, 'HP');
-              }
-              if (Number.isFinite(total)) setPotions(total);
-              const bmTotal = await getTotalBMTokenBalance(client, owner, pkg);
-              if (Number.isFinite(bmTotal)) setTokens(bmTotal);
-            } catch (e) {
-              console.warn('[Onchain] refresh potions total failed', e);
-            }
-          } catch (e) {
-            console.error('[Onchain] purchasePotions failed', e);
-            setPurchasingPotion(false);
-            return { error: String(e?.message || e) };
-          }
-        }
-        setSystemMessage({ key: 'inventory.potionConfirm', params: { amount } });
-        setPurchasingPotion(false);
-        return { success: true };
-      } finally {
-        setPurchasingPotion(false);
-      }
+      return inventoryService.purchasePotions(amount, cost);
     },
-    toggleChainLog: () => setShowChainLog((v) => !v),
-    clearChainLog: () => {
-      try { localStorage.setItem(CHAIN_LOG_KEY, JSON.stringify([])); } catch (_) {}
-      setChainLog([]);
-    },
+    toggleChainLog: () => uiService.toggleChainLog(),
+    clearChainLog: () => uiService.clearChainLog(),
   };
 
   const navItems = Object.entries(pages).filter(([, page]) => page.showInNav !== false);
