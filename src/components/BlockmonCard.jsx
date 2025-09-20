@@ -1,13 +1,15 @@
 import React from 'react'
 import { translateSpecies, translateTemperament, translateOrigin } from '../i18n'
 
-export default function BlockmonCard({ blockmon, onSelect, selectable = false, isSelected = false, language = 'ko', t = () => '' }) {
-  const { name, dna, species, hp, stats, rank, origin, temperament, power } = blockmon
-  const speciesLabel = translateSpecies(species, language)
-  const originLabel = origin ? t('blockmon.origin', { value: translateOrigin(origin, language) }) : null
-  const temperamentLabel = temperament ? t('blockmon.temperament', { value: translateTemperament(temperament, language) }) : null
+export default function BlockmonCard({ blockmon, onSelect, selectable = false, isSelected = false, t }) {
+  const { name, dna, species, hp, stats, rank, origin, temperament, power, skill } = blockmon
+  const speciesLabel = translateSpecies(species, t.language)
+  const originLabel = origin ? t('blockmon.origin', { value: translateOrigin(origin, t.language) }) : null
+  const temperamentLabel = temperament ? t('blockmon.temperament', { value: translateTemperament(temperament, t.language) }) : null
   const powerLabel = power ? t('blockmon.powerLabel') : null
-  const displayName = language === 'en' ? speciesLabel || name : name
+  const displayName = t.language === 'en' ? speciesLabel || name : name
+  const skillName = skill ? t(skill.name) : ''
+  const skillDescription = skill ? t(skill.description) : ''
 
   return (
     <div
@@ -34,6 +36,12 @@ export default function BlockmonCard({ blockmon, onSelect, selectable = false, i
         <li>WIS {stats.wis}</li>
         <li>CHA {stats.cha}</li>
       </ul>
+      {skill && (
+        <div className="blockmon-card__skill">
+          <h4>{skillName}</h4>
+          <p>{skillDescription}</p>
+        </div>
+      )}
     </div>
   )
 }

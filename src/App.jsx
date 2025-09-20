@@ -145,7 +145,11 @@ function GameApp() {
   const [potions, setPotions] = useState(2);
   const [language, setLanguage] = useState("ko");
 
-  const t = (key, params) => translate(language, key, params);
+  const t = useMemo(() => {
+    const translateFn = (key, params) => translate(language, key, params);
+    translateFn.language = language;
+    return translateFn;
+  }, [language]);
 
   const appendSeed = (seedHex, context) => {
     setSeedHistory((prev) => [
@@ -279,7 +283,7 @@ function GameApp() {
       const battleSeed = generateSeed();
       const battleSeedHex = formatSeed(battleSeed);
       const wild = createBlockmonFromSeed(battleSeed, { origin: "야생 조우" });
-      const result = rollBattleOutcome(playerMon, wild, battleSeed);
+      const result = rollBattleOutcome(playerMon, wild, battleSeed, t);
 
       const encounterEntry = {
         time: formatLogTime(language, offset++),
@@ -544,7 +548,7 @@ function GameApp() {
     const opponent = createBlockmonFromSeed(opponentSeed, {
       origin: "PVP 상대",
     });
-    const result = rollBattleOutcome(contender, opponent, opponentSeed);
+    const result = rollBattleOutcome(contender, opponent, opponentSeed, t);
     const logs = assembleBattleLog(
       result.rounds,
       result.outcome,
@@ -586,7 +590,7 @@ function GameApp() {
 
     setPvpHistory((prev) => [...prev, record]);
     setSystemMessage(
-      result.outcome === "win" ? t("system.pvpWin") : t("system.pvpLose")
+      result.outcome === "win" ? t("system.pveWin") : t("system.pveLose")
     );
     setCurrentPage("pvp");
     return { success: true, record };
