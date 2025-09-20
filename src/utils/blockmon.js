@@ -1,5 +1,4 @@
 import { TransactionBlock } from "@mysten/sui.js/transactions";
-import { SuiClient } from "@mysten/sui.js/client";
 import {
   detectSigningStrategy,
   createEnvKeypairFromEnv,
@@ -35,8 +34,8 @@ export async function executeTransaction({ tx, executor, client, signAndExecute 
   if (typeof effectiveExecutor !== "function") {
     const strategy = detectSigningStrategy();
     if (strategy === "env-key") {
-      if (!(client instanceof SuiClient)) {
-        throw new Error("SuiClient instance is required to sign with env-key strategy");
+      if (!client || typeof client.signAndExecuteTransactionBlock !== "function") {
+        throw new Error("SuiClient with signAndExecuteTransactionBlock is required for env-key strategy");
       }
       const keypair = createEnvKeypairFromEnv();
       if (!keypair) {
@@ -59,8 +58,8 @@ export function ensureExecutor({ executor, client, signAndExecute }) {
   if (typeof executor === "function") return executor;
   const strategy = detectSigningStrategy();
   if (strategy === "env-key") {
-    if (!(client instanceof SuiClient)) {
-      throw new Error("SuiClient instance is required to sign with env-key strategy");
+    if (!client || typeof client.signAndExecuteTransactionBlock !== "function") {
+      throw new Error("SuiClient with signAndExecuteTransactionBlock is required for env-key strategy");
     }
     const keypair = createEnvKeypairFromEnv();
     if (!keypair) {
@@ -205,7 +204,7 @@ export function buildRecordBattleTx({
   opponentRemainingHp,
 }) {
   const pkg = resolvePackageId(packageId);
-  const tx = new Transaction();
+  const tx = new TransactionBlock();
   tx.moveCall({
     target: fn(pkg, "recordBattle"),
     arguments: [
@@ -222,7 +221,7 @@ export function buildRecordBattleTx({
 // Build: burn (consumes the object)
 export function buildBurnTx({ packageId, blockmonId }) {
   const pkg = resolvePackageId(packageId);
-  const tx = new Transaction();
+  const tx = new TransactionBlock();
   tx.moveCall({
     target: fn(pkg, "burn"),
     arguments: [tx.object(blockmonId)],
@@ -310,8 +309,8 @@ export async function burn({ executor, packageId, blockmonId, client, signAndExe
 
 // READ helpers
 export async function getBlockMon(client, objectId) {
-  if (!(client instanceof SuiClient)) {
-    throw new Error("client must be an instance of SuiClient");
+  if (!client || typeof client.getObject !== "function") {
+    throw new Error("client must implement getObject");
   }
   const res = await client.getObject({ id: objectId, options: { showContent: true, showOwner: true } });
   return res;
@@ -343,8 +342,8 @@ export async function listBurnedEvents(client, packageId, cursor) {
 
 // List: owned BlockMon objects by owner address (paginated)
 export async function listOwnedBlockMons(client, ownerAddress, packageId, cursor, limit = 50) {
-  if (!(client instanceof SuiClient)) {
-    throw new Error("client must be an instance of SuiClient");
+  if (!client || typeof client.getOwnedObjects !== "function") {
+    throw new Error("client must implement getOwnedObjects");
   }
   if (!ownerAddress) {
     throw new Error("ownerAddress is required");

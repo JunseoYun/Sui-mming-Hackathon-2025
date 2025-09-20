@@ -1,4 +1,3 @@
-import { SuiClient } from "@mysten/sui.js/client";
 import { TransactionBlock } from "@mysten/sui.js/transactions";
 import { Ed25519Keypair } from "@mysten/sui.js/keypairs/ed25519";
 
@@ -70,8 +69,10 @@ export function getAddressFromKeypair(keypair) {
 }
 
 export function buildEnvKeyExecutor({ client, keypair }) {
-  if (!(client instanceof SuiClient)) {
-    throw new Error("client must be SuiClient instance");
+  const hasTxBlock = !!(client && typeof client.signAndExecuteTransactionBlock === "function");
+  const hasTx = !!(client && typeof client.signAndExecuteTransaction === "function");
+  if (!hasTxBlock && !hasTx) {
+    throw new Error("client must implement signAndExecuteTransaction or signAndExecuteTransactionBlock");
   }
   if (!keypair) {
     throw new Error("keypair is required for env-key executor");
@@ -83,9 +84,16 @@ export function buildEnvKeyExecutor({ client, keypair }) {
       tx = rebuilt;
     }
     tx.setSenderIfNotSet(getAddressFromKeypair(keypair));
-    return client.signAndExecuteTransactionBlock({
+    if (hasTxBlock) {
+      return client.signAndExecuteTransactionBlock({
+        signer: keypair,
+        transactionBlock: tx,
+        options: { showEffects: true, showObjectChanges: true, showEvents: true },
+      });
+    }
+    return client.signAndExecuteTransaction({
       signer: keypair,
-      transactionBlock: tx,
+      transaction: tx,
       options: { showEffects: true, showObjectChanges: true, showEvents: true },
     });
   };
