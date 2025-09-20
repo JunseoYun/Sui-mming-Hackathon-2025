@@ -80,7 +80,7 @@
   - e2e(Devnet) (선택): Adventure/PvP/Fusion 정산 PTB 실행 및 잔액/이벤트 검증.
 
 ### 2) Sui 고유성 고도화(가치 상승)
-- **인벤토리 오브젝트화**: `bag`/`dynamic_field`로 플레이어 인벤토리에 포션/아이템을 부착(조합성/쿼리 안정성 향상).
+- **인벤토리 오브젝트화**: `bag`/`dynamic_field`로 플레이어 인벤토리에 포션/아이템을 부착(조합성/쿼리 안정성 향상). [완료]
 - **배치 민팅 최적화**: `entry create_many(...)` 추가(루프 내부 생성 즉시 전송) 또는 내부 전송 처리로 가스 절감.
 - **Kiosk/TransferPolicy**: 블록몬 거래/로열티/락 정책 모델링.
 - **Display**: `display` 메타데이터로 NFT UX 개선.
@@ -90,7 +90,6 @@
 - 앱 시작 시 보류 큐 자동 플러시(미처리 민트/번 재시도) 루틴.
 - 타입 강화(가능하면 TS 전환), 체인 에러 매핑/사용자 메시지 일관화.
 - 가스/성능 로깅 및 간단한 대시보드.
-
  
 
 ## Acceptance Checklist
@@ -105,7 +104,7 @@
 - [x] Move 네이밍 snake_case 및 에러 코드 상수화
 - [x] Move 유닛 테스트 추가(블록몬/인벤토리/컨피그, 이벤트/에러 검증)
 - [ ] Devnet e2e 파이프라인 추가(해커톤 범위: 선택/생략)
-- [ ] 인벤토리 Dynamic Fields/Bag 도입
+- [x] 인벤토리 Dynamic Fields/Bag 도입
 - [ ] create_many 도입 또는 PTB 최적화
 - [ ] Display/Kiosk/TransferPolicy 연계
 - [ ] 이벤트 스키마 표준화와 문서화
@@ -120,7 +119,7 @@
 ## 참고(파일/모듈)
 - Move: `move/sources/blockmon.move`, `move/sources/inventory.move`, `move/sources/config.move`
 - 체인 서비스: `src/services/chain.js`, 실행전략 `src/utils/signer.js`
-- 도메인 서비스: `src/services/adventureService.js`, `fusionService.js`, `inventoryService.js`, `pvpService.js`
+- 도메인 서비스: `src/services/adventureService.js`, `fusionService.js`, `src/services/inventoryService.js`, `pvpService.js`
 - 매퍼: `src/utils/mappers.js`
 
 

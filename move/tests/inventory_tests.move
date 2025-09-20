@@ -12,6 +12,9 @@ use blockmon::inventory::{
     create_potion, add_potions, use_potion,
     get_potion_quantity, burn_potion,
     E_INSUFFICIENT_BM_BALANCE, E_INSUFFICIENT_POTION_QUANTITY,
+    // Bag inventory
+    create_inventory, add_potion_to_inventory, use_potions_from_inventory,
+    get_potion_quantity_in_inventory, E_INSUFFICIENT_POTION_IN_BAG,
 };
 
 const SENDER: address = @0x111;
@@ -120,6 +123,79 @@ fun potion_use_insufficient_quantity_fails() {
     };
     let ctx = test_scenario::ctx(&mut scenario);
     use_potion(&mut potion, 2, ctx);
+    abort
+}
+
+
+// ===== Inventory (Bag/Dynamic Fields) Tests =====
+
+const HP: u8 = 1u8;
+const SENDER2: address = @0x222;
+
+#[test]
+fun inventory_create_add_and_update() {
+    let mut scenario = test_scenario::begin(SENDER2);
+
+    let mut inv = {
+        let ctx = test_scenario::ctx(&mut scenario);
+        create_inventory(ctx)
+    };
+
+    // add new entry (HP) quantity 3
+    {
+        let ctx = test_scenario::ctx(&mut scenario);
+        add_potion_to_inventory(&mut inv, HP, 50, 3, string::utf8(b"HP Potion"), ctx);
+    };
+    assert_eq!(get_potion_quantity_in_inventory(&inv, HP), 3);
+
+    // add again (update existing)
+    {
+        let ctx = test_scenario::ctx(&mut scenario);
+        add_potion_to_inventory(&mut inv, HP, 50, 2, string::utf8(b"HP Potion"), ctx);
+    };
+    assert_eq!(get_potion_quantity_in_inventory(&inv, HP), 5);
+
+    test_scenario::end(scenario);
+}
+
+#[test]
+fun inventory_use_potions_success() {
+    let mut scenario = test_scenario::begin(SENDER2);
+
+    let mut inv = {
+        let ctx = test_scenario::ctx(&mut scenario);
+        create_inventory(ctx)
+    };
+    {
+        let ctx = test_scenario::ctx(&mut scenario);
+        add_potion_to_inventory(&mut inv, HP, 50, 3, string::utf8(b"HP Potion"), ctx);
+    };
+    assert_eq!(get_potion_quantity_in_inventory(&inv, HP), 3);
+
+    {
+        let ctx = test_scenario::ctx(&mut scenario);
+        use_potions_from_inventory(&mut inv, HP, 2, ctx);
+    };
+    assert_eq!(get_potion_quantity_in_inventory(&inv, HP), 1);
+
+    test_scenario::end(scenario);
+}
+
+#[test, expected_failure(abort_code = E_INSUFFICIENT_POTION_IN_BAG)]
+fun inventory_use_potions_insufficient_should_fail() {
+    let mut scenario = test_scenario::begin(SENDER2);
+
+    let mut inv = {
+        let ctx = test_scenario::ctx(&mut scenario);
+        create_inventory(ctx)
+    };
+    {
+        let ctx = test_scenario::ctx(&mut scenario);
+        add_potion_to_inventory(&mut inv, HP, 50, 1, string::utf8(b"HP Potion"), ctx);
+    };
+
+    let ctx = test_scenario::ctx(&mut scenario);
+    use_potions_from_inventory(&mut inv, HP, 2, ctx);
     abort
 }
 

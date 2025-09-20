@@ -333,6 +333,82 @@ export function getBMCoinStructTag(packageId) {
   return `0x2::coin::Coin<${getBMTypeTag(packageId)}>`;
 }
 
+// ========== INVENTORY BAG HELPERS ==========
+
+export function getInventoryStructTag(packageId) {
+  const pkg = resolvePackageId(packageId);
+  return `${pkg}::inventory::Inventory`;
+}
+
+export async function listOwnedInventories(client, ownerAddress, packageId, cursor, limit = 50) {
+  if (!client || typeof client.getOwnedObjects !== "function") {
+    throw new Error("client must implement getOwnedObjects");
+  }
+  if (!ownerAddress) {
+    throw new Error("ownerAddress is required");
+  }
+  const pkg = resolvePackageId(packageId);
+  const res = await client.getOwnedObjects({
+    owner: ownerAddress,
+    filter: { StructType: `${pkg}::inventory::Inventory` },
+    options: { showType: true, showContent: true, showOwner: true },
+    cursor,
+    limit,
+  });
+  return res;
+}
+
+export function buildCreateInventoryTx({ packageId, sender }) {
+  const pkg = resolvePackageId(packageId);
+  if (!sender) throw new Error("sender address is required to receive Inventory");
+  const tx = new TransactionBlock();
+  const created = tx.moveCall({ target: fn(pkg, "create_inventory"), arguments: [] });
+  tx.transferObjects([created], tx.pure.address(sender));
+  return tx;
+}
+
+export function buildAddPotionToInventoryTx({ packageId, inventoryId, potionType, effectValue, quantity, description }) {
+  const pkg = resolvePackageId(packageId);
+  const tx = new TransactionBlock();
+  tx.moveCall({
+    target: fn(pkg, "add_potion_to_inventory"),
+    arguments: [
+      tx.object(inventoryId),
+      tx.pure.string(potionType ?? "HP"),
+      tx.pure.u64(effectValue),
+      tx.pure.u64(quantity),
+      tx.pure.string(description ?? "HP Potion"),
+    ],
+  });
+  return tx;
+}
+
+export function buildUsePotionsFromInventoryTx({ packageId, inventoryId, potionType, quantity }) {
+  const pkg = resolvePackageId(packageId);
+  const tx = new TransactionBlock();
+  tx.moveCall({
+    target: fn(pkg, "use_potions_from_inventory"),
+    arguments: [tx.object(inventoryId), tx.pure.string(potionType ?? "HP"), tx.pure.u64(quantity)],
+  });
+  return tx;
+}
+
+export async function createInventory({ executor, packageId, sender, client, signAndExecute }) {
+  const tx = buildCreateInventoryTx({ packageId, sender });
+  const res = await executeTransaction({ tx, executor, client, signAndExecute });
+  return res;
+}
+
+export async function addPotionToInventory({ executor, packageId, inventoryId, potionType, effectValue, quantity, description, client, signAndExecute }) {
+  const tx = buildAddPotionToInventoryTx({ packageId, inventoryId, potionType, effectValue, quantity, description });
+  return executeTransaction({ tx, executor, client, signAndExecute });
+}
+
+export async function usePotionsFromInventory({ executor, packageId, inventoryId, potionType, quantity, client, signAndExecute }) {
+  const tx = buildUsePotionsFromInventoryTx({ packageId, inventoryId, potionType, quantity });
+  return executeTransaction({ tx, executor, client, signAndExecute });
+}
+
 export async function listOwnedBMCoinObjects(client, ownerAddress, packageId, cursor, limit = 50) {
   if (!client || typeof client.getOwnedObjects !== "function") {
     throw new Error("client must implement getOwnedObjects");
