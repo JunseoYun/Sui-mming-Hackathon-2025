@@ -80,6 +80,7 @@ export function extractCreatedByType(executionResult, fullType) {
 }
 
 // ========== BM TOKEN FUNCTIONS ==========
+// Note: BM token object path is deprecated and will be removed after Coin<BM> migration
 
 // Build: create BM Token and transfer to sender
 export function buildCreateBMTokenTx({
@@ -325,6 +326,128 @@ export async function transferBMToken({ executor, packageId, bmTokenId, newOwner
 export async function burnBMToken({ executor, packageId, bmTokenId, client, signAndExecute }) {
   const tx = buildBurnBMTokenTx({ packageId, bmTokenId });
   return executeTransaction({ tx, executor, client, signAndExecute });
+}
+
+// ========== COIN<BM> HELPERS ==========
+
+export function getBMTypeTag(packageId) {
+  const pkg = resolvePackageId(packageId);
+  return `${pkg}::inventory::BM`;
+}
+
+export function getBMCoinStructTag(packageId) {
+  return `0x2::coin::Coin<${getBMTypeTag(packageId)}>`;
+}
+
+export async function listOwnedBMCoinObjects(client, ownerAddress, packageId, cursor, limit = 50) {
+  if (!client || typeof client.getOwnedObjects !== "function") {
+    throw new Error("client must implement getOwnedObjects");
+  }
+  if (!ownerAddress) {
+    throw new Error("ownerAddress is required");
+  }
+  const coinStruct = getBMCoinStructTag(packageId);
+  const res = await client.getOwnedObjects({
+    owner: ownerAddress,
+    filter: { StructType: coinStruct },
+    options: { showType: true, showContent: true, showOwner: true, showDisplay: false },
+    cursor,
+    limit,
+  });
+  return res;
+}
+
+export async function getTotalBMCoinBalance(client, ownerAddress, packageId) {
+  if (!ownerAddress) return 0;
+  const coinType = getBMTypeTag(packageId);
+  // Prefer getBalance if available
+  if (typeof client.getBalance === "function") {
+    try {
+      const res = await client.getBalance({ owner: ownerAddress, coinType });
+      const total = parseInt(res?.totalBalance ?? 0);
+      if (Number.isFinite(total)) return total;
+    } catch (_) {}
+  }
+  // Fallback to summing owned coin objects
+  try {
+    const owned = await listOwnedBMCoinObjects(client, ownerAddress, packageId, null, 200);
+    let total = 0;
+    for (const it of owned?.data ?? []) {
+      const fields = it?.data?.content?.fields ?? it?.content?.fields;
+      const bal = fields?.balance ?? fields?.value;
+      if (bal != null) total += parseInt(bal);
+    }
+    return total;
+  } catch (_) {
+    return 0;
+  }
+}
+
+// Backward-compatible alias
+export const getTotalBMTokenBalance = getTotalBMCoinBalance;
+
+// Build: mint Coin<BM> to recipient using TreasuryCap<BM>
+export function buildMintBMCoinTx({ packageId, capId, recipient, amount }) {
+  const pkg = resolvePackageId(packageId);
+  if (!capId) throw new Error("TreasuryCap<BM> object id (capId) is required");
+  if (!recipient) throw new Error("recipient address is required");
+  const tx = new TransactionBlock();
+  tx.moveCall({
+    target: `${pkg}::inventory::mint_bm`,
+    typeArguments: [],
+    arguments: [tx.pure.address(recipient), tx.pure.u64(amount), tx.object(capId)],
+  });
+  return tx;
+}
+
+export async function mintBMCoin({ executor, packageId, capId, recipient, amount, client, signAndExecute }) {
+  const tx = buildMintBMCoinTx({ packageId, capId, recipient, amount });
+  return executeTransaction({ tx, executor, client, signAndExecute });
+}
+
+// Spend BM by transferring to a sink/treasury address (no burn without cap)
+export async function spendBMCoin({ executor, packageId, owner, amount, sinkAddress, client, signAndExecute }) {
+  if (!owner) throw new Error("owner address required");
+  if (!sinkAddress) throw new Error("sinkAddress is required to receive spent BM");
+  const pkg = resolvePackageId(packageId);
+  const coinTypeTag = getBMTypeTag(pkg);
+  const coinStruct = `0x2::coin::Coin<${coinTypeTag}>`;
+
+  // Gather owned coin ids first
+  const owned = await listOwnedBMCoinObjects(client, owner, pkg, null, 200);
+  const coinIds = (owned?.data ?? [])
+    .map((it) => it?.data?.objectId || it?.objectId)
+    .filter(Boolean);
+  if (coinIds.length === 0) throw new Error("no BM coins to spend");
+
+  const tx = new TransactionBlock();
+  // Build vector<Coin<BM>> from owned coins
+  const coinVec = tx.makeMoveVec({ type: coinStruct, elements: coinIds.map((id) => tx.object(id)) });
+  // Join into single coin
+  const merged = tx.moveCall({
+    target: `0x2::pay::join_vec`,
+    typeArguments: [coinTypeTag],
+    arguments: [coinVec],
+  });
+  // Prepare recipients/amounts vectors
+  const recipients = tx.makeMoveVec({ type: `address`, elements: [tx.pure.address(sinkAddress)] });
+  const amounts = tx.makeMoveVec({ type: `u64`, elements: [tx.pure.u64(amount)] });
+  // Split and transfer desired amount to sink; remaining stays with sender
+  tx.moveCall({
+    target: `0x2::pay::split_and_transfer`,
+    typeArguments: [coinTypeTag],
+    arguments: [merged, recipients, amounts],
+  });
+  return executeTransaction({ tx, executor, client, signAndExecute });
+}
+
+// Env helpers
+export function getEnvBMTreasuryCapId() {
+  return (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_BM_TREASURY_CAP_ID) || null;
+}
+
+export function getEnvBMSinkAddress() {
+  return (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_BM_SINK_ADDRESS) || null;
 }
 
 // ========== HIGH-LEVEL POTION OPERATIONS ==========

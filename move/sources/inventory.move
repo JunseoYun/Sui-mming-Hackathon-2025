@@ -3,6 +3,16 @@ module blockmon::inventory;
 
 use std::string::String;
 use sui::event;
+// coin module imported implicitly via fully-qualified paths when needed
+// ========== BM COIN (Coin<BM>) ==========
+
+/// Fungible BM coin type
+public struct BM has drop {}
+
+// Note: Coin<BM> support will be provided via standard coin module. Module-owned
+// init/mint/burn entries are temporarily omitted for compatibility with current
+// toolchain. Frontend uses standard coin ops (join/split/transfer) when available.
+
 
 // ========== BM TOKEN STRUCTURES ==========
 

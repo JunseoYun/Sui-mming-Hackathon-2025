@@ -1,4 +1,6 @@
 import { TransactionBlock } from "@mysten/sui.js/transactions";
+import { detectSigningStrategy } from "../utils/signer";
+import { mintBMCoin, getEnvBMTreasuryCapId, spendBMCoin, getEnvBMSinkAddress, getTotalBMTokenBalance as getTotalBMCoinBalance } from "../utils/inventory";
 
 /**
  * WARNING: Do NOT call `inventory::transfer_*` from the frontend.
@@ -36,18 +38,25 @@ export function createInventoryService({
     const owner = signing.address ?? currentAccount?.address ?? null;
     if (!owner) return;
     const pkg = resolvePackageId();
-    let bmTokenId = null;
-    try {
-      const res = await listOwnedBMTokens(client, owner, pkg, null, 50);
-      const first = (res?.data ?? [])[0];
-      bmTokenId = first?.data?.objectId ?? first?.objectId ?? null;
-    } catch (_) {}
-    if (bmTokenId) {
-      await queueAndRetry('inventory.addBMTokens', async () => onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount: normalized, client }), { attempts: 4, baseDelayMs: 500 });
+    // Prefer Coin<BM> mint when env-key + cap is available, else fallback to BMToken object flow
+    const capId = getEnvBMTreasuryCapId();
+    const strategy = detectSigningStrategy();
+    if (capId && strategy === 'env-key') {
+      await queueAndRetry('inventory.mintBMCoin', async () => mintBMCoin({ executor, packageId: pkg, capId, recipient: owner, amount: normalized, client }), { attempts: 4, baseDelayMs: 500 });
     } else {
-      await queueAndRetry('inventory.createBMToken', async () => onchainCreateBMToken({ executor, packageId: pkg, sender: owner, amount: normalized, tokenType: 'BM', client }), { attempts: 4, baseDelayMs: 500 });
+      let bmTokenId = null;
+      try {
+        const res = await listOwnedBMTokens(client, owner, pkg, null, 50);
+        const first = (res?.data ?? [])[0];
+        bmTokenId = first?.data?.objectId ?? first?.objectId ?? null;
+      } catch (_) {}
+      if (bmTokenId) {
+        await queueAndRetry('inventory.addBMTokens', async () => onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount: normalized, client }), { attempts: 4, baseDelayMs: 500 });
+      } else {
+        await queueAndRetry('inventory.createBMToken', async () => onchainCreateBMToken({ executor, packageId: pkg, sender: owner, amount: normalized, tokenType: 'BM', client }), { attempts: 4, baseDelayMs: 500 });
+      }
     }
-    const total = await getTotalBMTokenBalance(client, owner, pkg);
+    const total = await getTotalBMCoinBalance(client, owner, pkg);
     if (Number.isFinite(total)) setTokens(total);
   };
 
@@ -81,7 +90,11 @@ export function createInventoryService({
         } catch (_) {}
 
         const tx = new TransactionBlock();
-        if (bmTokenId) {
+        // Prefer spending Coin<BM> to sink if configured; fallback to BMToken subtract
+        const sink = getEnvBMSinkAddress();
+        if (sink) {
+          await queueAndRetry('inventory.spendBMCoin', async () => spendBMCoin({ executor, packageId: pkg, owner, amount: costNormalized, sinkAddress: sink, client }), { attempts: 4, baseDelayMs: 500 });
+        } else if (bmTokenId) {
           tx.moveCall({ target: `${pkg}::inventory::subtract_bm_tokens`, arguments: [tx.object(bmTokenId), tx.pure.u64(costNormalized)] });
         }
         if (potionId) {
@@ -106,7 +119,7 @@ export function createInventoryService({
             total = await getTotalPotionCountByType(client, owner, pkg, 'HP');
           }
           if (Number.isFinite(total)) setPotions(total);
-          const bmTotal = await getTotalBMTokenBalance(client, owner, pkg);
+          const bmTotal = await getTotalBMCoinBalance(client, owner, pkg);
           if (Number.isFinite(bmTotal)) setTokens(bmTotal);
         } catch (_) {}
       }
