@@ -741,6 +741,54 @@ export async function listPotionBurnedEvents(client, packageId, cursor) {
 
 // ========== UTILITY FUNCTIONS ==========
 
+// Map human potion type to bag key kind (u8)
+function mapPotionTypeToKind(potionType) {
+  const t = String(potionType || 'HP').toUpperCase();
+  switch (t) {
+    case 'HP':
+      return 1;
+    default:
+      return 1;
+  }
+}
+
+async function getFirstOwnedInventoryId(client, ownerAddress, packageId) {
+  try {
+    const res = await listOwnedInventories(client, ownerAddress, packageId, null, 1);
+    const first = (res?.data ?? [])[0];
+    return first?.data?.objectId || first?.objectId || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function getInventoryBagId(client, inventoryId) {
+  if (!inventoryId) return null;
+  try {
+    const invObj = await client.getObject({ id: inventoryId, options: { showContent: true } });
+    const bag = invObj?.data?.content?.fields?.bag;
+    const bagId = bag?.fields?.id?.id || bag?.fields?.id || bag?.id?.id || bag?.id;
+    return bagId || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function getPotionQuantityInInventoryBag(client, packageId, inventoryId, potionKind) {
+  const bagId = await getInventoryBagId(client, inventoryId);
+  if (!bagId) return null;
+  const pkg = resolvePackageId(packageId);
+  const nameType = `${pkg}::inventory::PotionKey`;
+  try {
+    const res = await client.getDynamicFieldObject({ parentId: bagId, name: { type: nameType, value: { kind: Number.isFinite(Number(potionKind)) ? Math.trunc(Number(potionKind)) : 1 } } });
+    const valFields = res?.data?.content?.fields?.value?.fields;
+    const qty = parseInt(valFields?.quantity ?? 0);
+    return Number.isFinite(qty) ? qty : 0;
+  } catch (_) {
+    return null;
+  }
+}
+
 // Helper to check if user has sufficient BM tokens
 export async function hasSufficientBMTokens(client, bmTokenId, requiredAmount) {
   const bmToken = await getBMToken(client, bmTokenId);
@@ -765,16 +813,29 @@ export async function hasSufficientPotions(client, potionId, requiredQuantity) {
 
 // Helper to get total potion count by type for a user
 export async function getTotalPotionCountByType(client, ownerAddress, packageId, potionType = "HP") {
-  const ownedPotions = await listOwnedPotions(client, ownerAddress, packageId);
-  let totalCount = 0;
-  
-  if (ownedPotions?.data) {
-    for (const potion of ownedPotions.data) {
-      if (potion?.data?.content?.fields?.potion_type === potionType) {
-        totalCount += parseInt(potion.data.content.fields.quantity);
+  // 1) Prefer Inventory Bag dynamic field path
+  try {
+    const invId = await getFirstOwnedInventoryId(client, ownerAddress, packageId);
+    if (invId) {
+      const kind = mapPotionTypeToKind(potionType);
+      const qty = await getPotionQuantityInInventoryBag(client, packageId, invId, kind);
+      if (qty != null) return qty;
+    }
+  } catch (_) {}
+
+  // 2) Fallback to legacy Potion objects
+  try {
+    const ownedPotions = await listOwnedPotions(client, ownerAddress, packageId);
+    let totalCount = 0;
+    for (const potion of ownedPotions?.data ?? []) {
+      const fields = potion?.data?.content?.fields || potion?.content?.fields;
+      if (fields?.potion_type === potionType) {
+        const q = parseInt(fields?.quantity ?? 0);
+        if (Number.isFinite(q)) totalCount += q;
       }
     }
+    return totalCount;
+  } catch (_) {
+    return 0;
   }
-  
-  return totalCount;
 }

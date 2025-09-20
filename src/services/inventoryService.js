@@ -46,7 +46,7 @@ export function createInventoryService({
       try {
         const digest = res?.digest || res?.effects?.transactionDigest || res?.effectsDigest;
         if (digest && typeof client.waitForTransactionBlock === 'function') {
-          await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true } });
+          await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true, showEvents: true } });
         }
       } catch (_) {}
     } else {
@@ -61,7 +61,7 @@ export function createInventoryService({
         try {
           const digest = res?.digest || res?.effects?.transactionDigest || res?.effectsDigest;
           if (digest && typeof client.waitForTransactionBlock === 'function') {
-            await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true } });
+            await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true, showEvents: true } });
           }
         } catch (_) {}
       } else {
@@ -69,7 +69,7 @@ export function createInventoryService({
         try {
           const digest = res?.digest || res?.effects?.transactionDigest || res?.effectsDigest;
           if (digest && typeof client.waitForTransactionBlock === 'function') {
-            await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true } });
+            await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true, showEvents: true } });
           }
         } catch (_) {}
       }
@@ -124,9 +124,11 @@ export function createInventoryService({
             bmTokenId = firstBM?.data?.objectId ?? firstBM?.objectId ?? null;
           } catch (_) {}
           if (bmTokenId) {
-            const txSpend = new TransactionBlock();
-            txSpend.moveCall({ target: `${pkg}::inventory::subtract_bm_tokens`, arguments: [txSpend.object(bmTokenId), txSpend.pure.u64(costNormalized)] });
-            await queueAndRetry('inventory.spendBMToken', async () => executor(txSpend), { attempts: 4, baseDelayMs: 500 });
+            await queueAndRetry('inventory.spendBMToken', async () => {
+              const txSpend = new TransactionBlock();
+              txSpend.moveCall({ target: `${pkg}::inventory::subtract_bm_tokens`, arguments: [txSpend.object(bmTokenId), txSpend.pure.u64(costNormalized)] });
+              return executor(txSpend);
+            }, { attempts: 4, baseDelayMs: 500 });
           }
         }
 
@@ -134,27 +136,55 @@ export function createInventoryService({
         let inventoryId = await ensureInventory(owner, pkg);
         if (!inventoryId) {
           const inv = await loadInventoryModule();
-          const txCreate = inv.buildCreateInventoryTx({ packageId: pkg, sender: owner });
-          const resCreate = await queueAndRetry('inventory.createInventory', async () => executor(txCreate), { attempts: 3, baseDelayMs: 400 });
+          const resCreate = await queueAndRetry('inventory.createInventory', async () => {
+            const txCreate = inv.buildCreateInventoryTx({ packageId: pkg, sender: owner });
+            return executor(txCreate);
+          }, { attempts: 3, baseDelayMs: 400 });
           try {
+            // 우선 객체 변경에서 Inventory 생성 ID 추출 시도
+            const created = resCreate?.objectChanges?.find?.((c) => c.type === 'created' && typeof c.objectType === 'string' && c.objectType.endsWith('::inventory::Inventory'));
+            if (created?.objectId) {
+              inventoryId = created.objectId;
+            }
             const digest = resCreate?.digest || resCreate?.effects?.transactionDigest || resCreate?.effectsDigest;
-            if (digest && typeof client.waitForTransactionBlock === 'function') {
-              await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true } });
+            if (!inventoryId && digest && typeof client.waitForTransactionBlock === 'function') {
+              const waited = await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true } });
+              const created2 = waited?.objectChanges?.find?.((c) => c.type === 'created' && typeof c.objectType === 'string' && c.objectType.endsWith('::inventory::Inventory'));
+              if (created2?.objectId) inventoryId = created2.objectId;
             }
           } catch (_) {}
-          // fetch again
-          inventoryId = await ensureInventory(owner, pkg);
+          // 최종 폴백: 짧게 폴링하여 소유 인벤토리 재조회
+          if (!inventoryId) {
+            for (let i = 0; i < 6 && !inventoryId; i++) {
+              await new Promise((r) => setTimeout(r, 300));
+              // eslint-disable-next-line no-await-in-loop
+              inventoryId = await ensureInventory(owner, pkg);
+            }
+          }
         }
 
         // Add potions to Inventory bag (HP kind=1, effect=9999 until balancing)
         const inv = await loadInventoryModule();
-        const tx = inv.buildAddPotionToInventoryTx({ packageId: pkg, inventoryId, potionKind: 1, effectValue: 9999, quantity: amountNormalized, description: 'HP Potion' });
-        const res = await queueAndRetry('inventory.addPotionToInventory', async () => executor(tx), { attempts: 4, baseDelayMs: 500 });
+        const res = await queueAndRetry('inventory.addPotionToInventory', async () => {
+          const tx = inv.buildAddPotionToInventoryTx({ packageId: pkg, inventoryId, potionKind: 1, effectValue: 9999, quantity: amountNormalized, description: 'HP Potion' });
+          return executor(tx);
+        }, { attempts: 4, baseDelayMs: 500 });
         try {
           const digest = res?.digest || res?.effects?.transactionDigest || res?.effectsDigest;
+          let events = res?.events;
           if (digest && typeof client.waitForTransactionBlock === 'function') {
-            await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true } });
+            const waited = await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true, showEvents: true } });
+            events = events || waited?.events;
           }
+          // Event-driven immediate update
+          try {
+            const evtType = `${pkg}::inventory::PotionAddedOrUpdatedInBag`;
+            const evt = (events || []).find((e) => e?.type === evtType);
+            const newQty = parseInt(evt?.parsedJson?.new_quantity ?? evt?.parsedJson?.newQuantity ?? 0);
+            if (Number.isFinite(newQty) && newQty >= 0) {
+              setPotions(newQty);
+            }
+          } catch (_) {}
         } catch (_) {}
 
         // Refresh UI counts
