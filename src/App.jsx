@@ -33,6 +33,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { isEnokiNetwork, registerEnokiWallets } from "@mysten/enoki";
 import FusionFeedback from "./components/FusionFeedback";
 import ChainLog from "./components/ChainLog";
+import AppView from "./components/AppView";
 import { getFullnodeUrl } from "@mysten/sui.js/client";
 import { TransactionBlock } from "@mysten/sui.js/transactions";
 import {
@@ -1781,141 +1782,119 @@ function GameApp() {
     },
   };
 
-  const navItems = Object.entries(pages).filter(
-    ([, page]) => page.showInNav !== false
-  );
-
-  const resolvedSystemMessage = systemMessage
-    ? t(systemMessage.key, systemMessage.params)
-    : '';
-
-  const header = (
-    <header className="app__top">
-      <span className="app__brand">{t("app.brand")}</span>
-      {player && (
-        <nav className="app__nav">
-          {navItems.map(([key, { labelKey }]) => (
-            <button
-              key={key}
-              className={currentPage === key ? "is-active" : ""}
-              onClick={() => navigate(key)}
-            >
-              {t(labelKey)}
-            </button>
-          ))}
-        </nav>
-      )}
-      <div className="app__language">
-        <button
-          className={language === "ko" ? "is-active" : ""}
-          onClick={() => setLanguage("ko")}
-        >
-          {t("home.language.korean")}
-        </button>
-        <button
-          className={language === "en" ? "is-active" : ""}
-          onClick={() => setLanguage("en")}
-        >
-          {t("home.language.english")}
-        </button>
-      </div>
-    </header>
-  );
+  const navItems = Object.entries(pages).filter(([, page]) => page.showInNav !== false);
 
   if (!player) {
     return (
-      <div className="app signup-app">
-        {header}
-        <main className="app__content">
-          <Signup onRegister={registerUser} language={language} t={t} signing={signing} />
-        </main>
-      </div>
+      <AppView
+        t={t}
+        player={player}
+        navItems={navItems}
+        currentPage={currentPage}
+        onNavigate={navigate}
+        language={language}
+        onSetLanguage={setLanguage}
+        systemMessage={systemMessage}
+        pages={pages}
+        gameState={gameState}
+        actions={{ ...actions, registerUser }}
+        fusionFeedbackSlot={null}
+        showChainLogSlot={
+          <main className="app__content">
+            <Signup onRegister={registerUser} language={language} t={t} signing={signing} />
+          </main>
+        }
+      />
     );
   }
 
-  const CurrentComponent = pages[currentPage]?.component ?? Home;
-
   return (
-    <div className="app">
-      {header}
-
-      {resolvedSystemMessage && <div className="app__notice">{resolvedSystemMessage}</div>}
-
-      <FusionFeedback
-        feedback={fusionFeedback}
-        onClose={() => setFusionFeedback(null)}
-        t={t}
-        language={language}
-      />
-
-      <main className="app__content">
-        <CurrentComponent gameState={gameState} actions={actions} />
-      </main>
-
-      <div style={{ position: 'fixed', right: 12, bottom: showChainLog ? 260 : 12, zIndex: 999 }}>
-        <button onClick={() => setShowChainLog((v) => !v)}>
-          {showChainLog ? 'Hide Chain Logs' : 'Show Chain Logs'}
-        </button>
-      </div>
-
-      {showChainLog && (
-        <ChainLog
-          entries={chainLog}
-          mintQueue={loadPendingMints()}
-          burnQueue={loadPendingBurns()}
-          onClear={() => { try { localStorage.setItem(CHAIN_LOG_KEY, JSON.stringify([])); } catch (_) {}; setChainLog([]) }}
-          onClose={() => setShowChainLog(false)}
-          onFlushMints={() => {
-            // trigger flush by toggling effects: simply call the flush logic inline
-            (async () => {
-              const owner = signing.address ?? currentAccount?.address ?? null;
-              if (!owner) return;
-              const pkg = resolvePackageId();
-              const q = loadPendingMints();
-              const BATCH_SIZE = 5;
-              for (let i = 0; i < q.length; i += BATCH_SIZE) {
-                const batch = q.slice(i, i + BATCH_SIZE);
-                try {
-                  await queueAndRetry('ui.flush.mints.batch', async () => onchainCreateManyBlockMon({ executor, packageId: pkg, sender: owner, entries: batch, client, signAndExecute }), { attempts: 4, baseDelayMs: 600 });
-                  removeEntriesFromQueue([...batch]);
-                } catch (_) {
-                  for (const entry of batch) {
-                    try {
-                      await queueAndRetry('ui.flush.mints.single', async () => onchainCreateBlockMon({ executor, packageId: pkg, sender: owner, ...entry, client, signAndExecute }), { attempts: 6, baseDelayMs: 600 });
-                      removeEntriesFromQueue([entry]);
-                    } catch (_) {}
-                  }
-                }
-              }
-              setShowChainLog(true);
-            })();
-          }}
-          onFlushBurns={() => {
-            (async () => {
-              const owner = signing.address ?? currentAccount?.address ?? null;
-              if (!owner) return;
-              const pkg = resolvePackageId();
-              const all = loadPendingBurns();
-              const BATCH_SIZE = 10;
-              for (let i = 0; i < all.length; i += BATCH_SIZE) {
-                const batch = all.slice(i, i + BATCH_SIZE);
-                try {
-                  await queueAndRetry('ui.flush.burns.batch', async () => onchainBurnMany({ executor, packageId: pkg, blockmonIds: batch, client, signAndExecute }), { attempts: 5, baseDelayMs: 700 });
-                  removeBurnIdsFromQueue(batch);
-                } catch (_) {
-                  for (const id of batch) {
-                    try { await queueAndRetry('ui.flush.burns.single', async () => onchainBurn({ executor, packageId: pkg, blockmonId: id, client, signAndExecute }), { attempts: 6, baseDelayMs: 600 }); removeBurnIdsFromQueue([id]); } catch (_) {}
-                  }
-                }
-              }
-              setShowChainLog(true);
-            })();
-          }}
-          onClearMints={() => { clearPendingMints(); setShowChainLog(true); }}
-          onClearBurns={() => { clearPendingBurns(); setShowChainLog(true); }}
+    <AppView
+      t={t}
+      player={player}
+      navItems={navItems}
+      currentPage={currentPage}
+      onNavigate={navigate}
+      language={language}
+      onSetLanguage={setLanguage}
+      systemMessage={systemMessage}
+      pages={pages}
+      gameState={gameState}
+      actions={actions}
+      fusionFeedbackSlot={
+        <FusionFeedback
+          feedback={fusionFeedback}
+          onClose={() => setFusionFeedback(null)}
+          t={t}
+          language={language}
         />
-      )}
-    </div>
+      }
+      showChainLogSlot={
+        <>
+          <div style={{ position: 'fixed', right: 12, bottom: showChainLog ? 260 : 12, zIndex: 999 }}>
+            <button onClick={() => setShowChainLog((v) => !v)}>
+              {showChainLog ? 'Hide Chain Logs' : 'Show Chain Logs'}
+            </button>
+          </div>
+          {showChainLog && (
+            <ChainLog
+              entries={chainLog}
+              mintQueue={loadPendingMints()}
+              burnQueue={loadPendingBurns()}
+              onClear={() => { try { localStorage.setItem(CHAIN_LOG_KEY, JSON.stringify([])); } catch (_) {}; setChainLog([]) }}
+              onClose={() => setShowChainLog(false)}
+              onFlushMints={() => {
+                (async () => {
+                  const owner = signing.address ?? currentAccount?.address ?? null;
+                  if (!owner) return;
+                  const pkg = resolvePackageId();
+                  const q = loadPendingMints();
+                  const BATCH_SIZE = 5;
+                  for (let i = 0; i < q.length; i += BATCH_SIZE) {
+                    const batch = q.slice(i, i + BATCH_SIZE);
+                    try {
+                      await queueAndRetry('ui.flush.mints.batch', async () => onchainCreateManyBlockMon({ executor, packageId: pkg, sender: owner, entries: batch, client, signAndExecute }), { attempts: 4, baseDelayMs: 600 });
+                      removeEntriesFromQueue([...batch]);
+                    } catch (_) {
+                      for (const entry of batch) {
+                        try {
+                          await queueAndRetry('ui.flush.mints.single', async () => onchainCreateBlockMon({ executor, packageId: pkg, sender: owner, ...entry, client, signAndExecute }), { attempts: 6, baseDelayMs: 600 });
+                          removeEntriesFromQueue([entry]);
+                        } catch (_) {}
+                      }
+                    }
+                  }
+                  setShowChainLog(true);
+                })();
+              }}
+              onFlushBurns={() => {
+                (async () => {
+                  const owner = signing.address ?? currentAccount?.address ?? null;
+                  if (!owner) return;
+                  const pkg = resolvePackageId();
+                  const all = loadPendingBurns();
+                  const BATCH_SIZE = 10;
+                  for (let i = 0; i < all.length; i += BATCH_SIZE) {
+                    const batch = all.slice(i, i + BATCH_SIZE);
+                    try {
+                      await queueAndRetry('ui.flush.burns.batch', async () => onchainBurnMany({ executor, packageId: pkg, blockmonIds: batch, client, signAndExecute }), { attempts: 5, baseDelayMs: 700 });
+                      removeBurnIdsFromQueue(batch);
+                    } catch (_) {
+                      for (const id of batch) {
+                        try { await queueAndRetry('ui.flush.burns.single', async () => onchainBurn({ executor, packageId: pkg, blockmonId: id, client, signAndExecute }), { attempts: 6, baseDelayMs: 600 }); removeBurnIdsFromQueue([id]); } catch (_) {}
+                      }
+                    }
+                  }
+                  setShowChainLog(true);
+                })();
+              }}
+              onClearMints={() => { clearPendingMints(); setShowChainLog(true); }}
+              onClearBurns={() => { clearPendingBurns(); setShowChainLog(true); }}
+            />
+          )}
+        </>
+      }
+    />
   );
 }
 
