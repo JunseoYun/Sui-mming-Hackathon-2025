@@ -7,6 +7,7 @@ export function createAdventureService({
   getTokens,
   getPotions,
   setPotions,
+  setTokens,
   setSystemMessage,
   setAdventure,
   setBattle,

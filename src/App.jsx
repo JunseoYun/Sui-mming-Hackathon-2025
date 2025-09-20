@@ -1518,6 +1518,7 @@ function GameApp() {
     getTokens: () => tokens,
     getPotions: () => potions,
     setPotions,
+    setTokens,
     setSystemMessage,
     setAdventure,
     setBattle,
