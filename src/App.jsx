@@ -69,6 +69,17 @@ import {
   subtractBMTokens as onchainSubtractBMTokens,
   getTotalBMTokenBalance,
 } from "./utils/inventory";
+import {
+  createChainOps,
+  loadPendingMints,
+  clearPendingMints,
+  savePendingMints,
+  removeEntriesFromQueue,
+  loadPendingBurns,
+  clearPendingBurns,
+  enqueuePendingBurns,
+  removeBurnIdsFromQueue,
+} from "./services/chain";
 import { useTea, TeaMsg, initialModel } from "./state/tea";
 
 const pages = {
@@ -304,84 +315,10 @@ function GameApp() {
   const logTxSuccess = (action, res, meta) => appendChainLog({ level: 'info', action, status: 'success', digest: res?.digest || res?.effects?.transactionDigest || res?.effectsDigest, ...meta });
   const logTxError = (action, err, meta) => appendChainLog({ level: 'error', action, status: 'error', error: String(err?.message || err), ...meta });
 
-  // ----- Global serialization for on-chain tx to avoid gas coin version races -----
-  const txQueueRef = useRef(Promise.resolve());
-  const runSerialized = (name, fn) => {
-    const next = txQueueRef.current
-      .catch(() => {})
-      .then(async () => {
-        appendChainLog({ action: 'queue', status: 'start', name });
-        try {
-          const res = await fn();
-          appendChainLog({ action: 'queue', status: 'success', name });
-          return res;
-        } catch (e) {
-          appendChainLog({ action: 'queue', status: 'error', name, error: String(e?.message || e) });
-          throw e;
-        }
-      });
-    txQueueRef.current = next;
-    return next;
-  };
+  // ----- Chain side-effect helpers from services -----
+  const { runSerialized, withRetry, queueAndRetry } = useMemo(() => createChainOps(appendChainLog), [appendChainLog]);
 
-  // Retry helpers (exponential backoff) for transient version/lock errors
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const isRetriableChainError = (err) => {
-    const msg = String(err?.message || err || '');
-    return /already locked|not available for consumption|rejected as invalid/i.test(msg);
-  };
-  const withRetry = async (actionName, fn, { attempts = 5, baseDelayMs = 400 } = {}) => {
-    let lastErr;
-    for (let i = 0; i < attempts; i++) {
-      try {
-        if (i > 0) appendChainLog({ action: actionName, status: 'retry', attempt: i });
-        const res = await fn();
-        if (i > 0) appendChainLog({ action: actionName, status: 'retry-success', attempt: i });
-        await sleep(150);
-        return res;
-      } catch (e) {
-        lastErr = e;
-        if (!isRetriableChainError(e) || i === attempts - 1) throw e;
-        const delay = baseDelayMs * Math.pow(2, i) + Math.floor(Math.random() * 150);
-        await sleep(delay);
-      }
-    }
-    throw lastErr;
-  };
-  const queueAndRetry = (name, fn, opts) => runSerialized(name, () => withRetry(name, fn, opts));
-
-  // ----- Pending capture mint queue (local persistence) -----
-  const PENDING_MINT_KEY = 'blockmon_pending_capture_mints';
-  const loadPendingMints = () => {
-    try {
-      const raw = localStorage.getItem(PENDING_MINT_KEY);
-      if (!raw) return [];
-      const arr = JSON.parse(raw);
-      return Array.isArray(arr) ? arr : [];
-    } catch (_) {
-      return [];
-    }
-  };
-  const clearPendingMints = () => { try { localStorage.setItem(PENDING_MINT_KEY, JSON.stringify([])); } catch (_) {} };
-  const savePendingMints = (arr) => {
-    try {
-      localStorage.setItem(PENDING_MINT_KEY, JSON.stringify(arr || []));
-    } catch (_) {}
-  };
-  const entriesEqual = (a, b) => {
-    return a && b && a.monId === b.monId && a.name === b.name && a.hp === b.hp && a.str === b.str && a.dex === b.dex && a.con === b.con && a.int === b.int && a.wis === b.wis && a.cha === b.cha && a.skillName === b.skillName && a.skillDescription === b.skillDescription;
-  };
-  const removeEntriesFromQueue = (toRemove) => {
-    if (!toRemove?.length) return;
-    const q = loadPendingMints();
-    const remain = [];
-    for (const qItem of q) {
-      const idx = toRemove.findIndex((e) => entriesEqual(e, qItem));
-      if (idx === -1) remain.push(qItem);
-      else toRemove.splice(idx, 1);
-    }
-    savePendingMints(remain);
-  };
+  // Pending mint queue helpers moved to services/chain
 
   // Flush pending queue on owner ready
   useEffect(() => {
@@ -450,33 +387,7 @@ function GameApp() {
     return () => { cancelled = true; };
   }, [client, signing.address, currentAccount?.address, executor]);
 
-  // ----- Pending burn queue (local persistence) -----
-  const PENDING_BURN_KEY = 'blockmon_pending_burn_ids';
-  const loadPendingBurns = () => {
-    try {
-      const raw = localStorage.getItem(PENDING_BURN_KEY);
-      const arr = raw ? JSON.parse(raw) : [];
-      return Array.isArray(arr) ? arr : [];
-    } catch (_) { return []; }
-  };
-  const savePendingBurns = (arr) => {
-    try { localStorage.setItem(PENDING_BURN_KEY, JSON.stringify(arr || [])); } catch (_) {}
-  };
-  const clearPendingBurns = () => { try { localStorage.setItem(PENDING_BURN_KEY, JSON.stringify([])); } catch (_) {} };
-  const enqueuePendingBurns = (ids) => {
-    if (!Array.isArray(ids) || ids.length === 0) return;
-    const current = loadPendingBurns();
-    const set = new Set(current);
-    for (const id of ids) if (id) set.add(id);
-    savePendingBurns(Array.from(set));
-  };
-  const removeBurnIdsFromQueue = (ids) => {
-    if (!Array.isArray(ids) || ids.length === 0) return;
-    const current = loadPendingBurns();
-    const removeSet = new Set(ids);
-    const remain = current.filter((id) => !removeSet.has(id));
-    savePendingBurns(remain);
-  };
+  // Pending burn queue helpers moved to services/chain
 
   // Flush pending burns on owner ready
   useEffect(() => {
