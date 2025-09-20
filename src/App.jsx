@@ -30,6 +30,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { isEnokiNetwork, registerEnokiWallets } from "@mysten/enoki";
 import { getFullnodeUrl } from "@mysten/sui/client";
+import FusionFeedback from "./components/FusionFeedback";
 
 const pages = {
   home: { labelKey: "nav.home", component: Home, showInNav: true },
@@ -179,6 +180,7 @@ function GameApp() {
   const [pvpSelection, setPvpSelection] = useState([]);
   const [potions, setPotions] = useState(2);
   const [language, setLanguage] = useState("ko");
+  const [fusionFeedback, setFusionFeedback] = useState(null);
 
   const t = useMemo(() => {
     const translateFn = (key, params) => translate(language, key, params);
@@ -593,9 +595,7 @@ function GameApp() {
         key: 'system.fusionFailed',
         params: { chance: chancePercent },
       });
-      if (typeof window !== 'undefined') {
-        window.alert(t('fusion.alert.failure', { chance: chancePercent }));
-      }
+      setFusionFeedback({ type: 'failure', chance: chancePercent });
       return {
         error: {
           key: 'fusion.error.failure',
@@ -639,6 +639,11 @@ function GameApp() {
     };
     setFusionHistory((prev) => [...prev, record]);
     setSystemMessage({ key: 'system.fusionCreated' });
+    setFusionFeedback({
+      type: 'success',
+      chance: chancePercent,
+      blockmon: { name: newborn.name, species: newborn.species },
+    });
     return { success: true, newborn: record };
   };
 
@@ -660,7 +665,7 @@ function GameApp() {
       .map((id) => blockmons.find((mon) => mon.id === id))
       .filter(Boolean);
 
-    if (team.length < 4) {
+    if (team.length === 0) {
       return { error: t("pvp.error.selectTeam") };
     }
 
@@ -862,6 +867,13 @@ function GameApp() {
       {header}
 
       {resolvedSystemMessage && <div className="app__notice">{resolvedSystemMessage}</div>}
+
+      <FusionFeedback
+        feedback={fusionFeedback}
+        onClose={() => setFusionFeedback(null)}
+        t={t}
+        language={language}
+      />
 
       <main className="app__content">
         <CurrentComponent gameState={gameState} actions={actions} />

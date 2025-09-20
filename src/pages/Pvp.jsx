@@ -1,12 +1,11 @@
 import React, { useMemo, useState } from "react";
 import BattleLog from "../components/BattleLog";
 import BlockmonCard from "../components/BlockmonCard";
-import { translateSpecies } from "../i18n";
 
 export default function Pvp({ gameState, actions }) {
-  const { blockmons, tokens, pvpHistory, pvpSelection, language, t } =
-    gameState;
+  const { blockmons, pvpHistory, pvpSelection, language, t } = gameState;
   const [error, setError] = useState("");
+  const [sortKey, setSortKey] = useState("default");
 
   const latest = useMemo(
     () => (pvpHistory.length ? pvpHistory[pvpHistory.length - 1] : null),
@@ -14,14 +13,28 @@ export default function Pvp({ gameState, actions }) {
   );
   const selectedTeam = pvpSelection ?? [];
 
+  const sortedBlockmons = useMemo(() => {
+    if (sortKey === "strong") {
+      return [...blockmons].sort((a, b) => (b.power ?? 0) - (a.power ?? 0));
+    }
+    if (sortKey === "weak") {
+      return [...blockmons].sort((a, b) => (a.power ?? 0) - (b.power ?? 0));
+    }
+    return blockmons;
+  }, [blockmons, sortKey]);
+
   const handleMatch = () => {
+    setError("");
+    if (!selectedTeam.length) {
+      setError(t("pvp.error.selectTeam"));
+      return;
+    }
     const result = actions.runPvpMatch();
     if (result?.error) {
       setError(result.error);
     } else {
       setError("");
     }
-    //todo: pvp match
   };
 
   const toggleMember = (blockmon) => {
@@ -32,13 +45,12 @@ export default function Pvp({ gameState, actions }) {
       return;
     }
     if (selectedTeam.length >= 4) {
-      setError(t("pvp.error.selectTeam"));
+      const [, ...rest] = selectedTeam;
+      actions.setPvpSelection([...rest, blockmon.id]);
       return;
     }
     actions.setPvpSelection([...selectedTeam, blockmon.id]);
   };
-
-  const primaryBlockmon = blockmons[0];
 
   return (
     <div className="page page--pvp">
@@ -49,23 +61,10 @@ export default function Pvp({ gameState, actions }) {
 
       <section className="pvp__status">
         <div className="pvp__card">
-          <h2>{t("pvp.card.entry")}</h2>
-          {primaryBlockmon ? (
-            <p>
-              {primaryBlockmon.name} ·{" "}
-              {translateSpecies(primaryBlockmon.species, language)}
-            </p>
-          ) : (
-            <p>{t("pvp.card.noBlockmon")}</p>
-          )}
-          <p>{t("pvp.card.tokens", { value: tokens })}</p>
-        </div>
-        <div className="pvp__card">
           <h2>{t("pvp.card.rulesTitle")}</h2>
           <ul>
             <li>{t("pvp.card.ruleStake")}</li>
             <li>{t("pvp.card.ruleReward")}</li>
-            <li>{t("pvp.card.ruleProfit")}</li>
             <li>{t("pvp.card.ruleLoss")}</li>
           </ul>
         </div>
@@ -105,29 +104,71 @@ export default function Pvp({ gameState, actions }) {
 
       <section className="pvp__selection">
         <h2>{t("pvp.selection.title")}</h2>
+        <div className="primary-callout">
+          <button
+            className="primary-callout-button"
+            onClick={handleMatch}
+            disabled={!selectedTeam.length}
+          >
+            {t("pvp.actions.match")}
+          </button>
+        </div>
+        {blockmons.length > 0 && (
+          <div className="home__team-toolbar">
+            <span>{t("home.selectedCount", { count: selectedTeam.length })}</span>
+            <div className="home__sort-buttons">
+              <button
+                type="button"
+                className={sortKey === "default" ? "is-active" : ""}
+                onClick={() => setSortKey("default")}
+              >
+                {t("home.sort.default")}
+              </button>
+              <button
+                type="button"
+                className={sortKey === "strong" ? "is-active" : ""}
+                onClick={() => setSortKey("strong")}
+              >
+                {t("home.sort.strong")}
+              </button>
+              <button
+                type="button"
+                className={sortKey === "weak" ? "is-active" : ""}
+                onClick={() => setSortKey("weak")}
+              >
+                {t("home.sort.weak")}
+              </button>
+            </div>
+            <button
+              type="button"
+              className="home__clear"
+              onClick={() => actions.setPvpSelection([])}
+              disabled={selectedTeam.length === 0}
+            >
+              {t("home.clearSelection")}
+            </button>
+          </div>
+        )}
         <div className="blockmon-grid">
-          {blockmons.map((blockmon) => (
-            <BlockmonCard
-              key={blockmon.id}
-              blockmon={blockmon}
-              selectable
-              isSelected={selectedTeam.includes(blockmon.id)}
-              onSelect={toggleMember}
-              language={language}
-              t={t}
-            />
-          ))}
+          {sortedBlockmons.map((blockmon) => {
+            const order = selectedTeam.indexOf(blockmon.id);
+            return (
+              <BlockmonCard
+                key={blockmon.id}
+                blockmon={blockmon}
+                selectable
+                isSelected={order !== -1}
+                order={order}
+                onSelect={toggleMember}
+                language={language}
+                t={t}
+              />
+            );
+          })}
         </div>
       </section>
 
       {error && <p className="page__error">{error}</p>}
-
-      <div className="pvp__actions">
-        <button onClick={handleMatch}>{t("pvp.actions.match")}</button>
-        <button onClick={() => actions.navigate("home")}>
-          {t("pvp.actions.home")}
-        </button>
-      </div>
 
       {latest && <BattleLog entries={latest.logs} t={t} />}
     </div>

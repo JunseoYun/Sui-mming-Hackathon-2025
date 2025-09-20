@@ -3,11 +3,18 @@ const translations = {
     "app.brand": "Blockmon Battle Prototype",
     "system.starterCreated": "첫 블록몬 DNA가 생성되었습니다!",
     "system.adventureSummary":
-      "모험 완료! 전투 {{battles}}회, 포획 {{captured}}마리, 보상 +{{tokens}} BM",
+      "모험 완료! 전투 {{battles}}회, 포획 {{captured}}마리",
     "system.fusionCreated":
       "새로운 블록몬이 탄생했습니다! 인벤토리에서 확인하세요.",
     "system.fusionFailed":
       "합성이 실패했습니다. 예상 성공 확률 {{chance}}%였습니다.",
+    "fusion.feedback.successTitle": "합성 성공!",
+    "fusion.feedback.successBody":
+      "{{name}}이(가) 탄생했습니다. (종족: {{species}})",
+    "fusion.feedback.failureTitle": "합성 실패",
+    "fusion.feedback.failureBody":
+      "합성이 불안정하여 실패했습니다. (성공 확률 {{chance}}%)",
+    "fusion.feedback.close": "확인",
     "system.pvpWin": "PVP 매치에서 승리했습니다! (순이익 +1 BM)",
     "system.pvpLose": "PVP 매치에서 패배했습니다. 배팅 토큰 3 BM을 잃었습니다.",
     "errors.noBlockmon": "보유한 블록몬이 없습니다.",
@@ -75,7 +82,7 @@ const translations = {
     "inventory.potionConfirm": "포션 {{amount}}개를 획득했습니다.",
     "inventory.potionError": "BM 토큰이 부족합니다.",
     "inventory.potionStock": "보유 포션: {{value}}개",
-    "pvp.error.selectTeam": "PVP에 출전할 블록몬 4마리를 선택하세요.",
+    "pvp.error.selectTeam": "PVP에 출전할 블록몬을 선택하세요.",
     "pvp.selection.title": "출전 블록몬 선택 (최대 4마리)",
     "adventure.log.potion": "{{name}}에게 포션을 사용하여 체력을 회복했습니다.",
     "adventure.prepTitle": "모험 준비",
@@ -172,8 +179,7 @@ const translations = {
     "pvp.card.tokens": "보유 토큰: {{value}} BM",
     "pvp.card.rulesTitle": "배팅 규칙",
     "pvp.card.ruleStake": "배팅: 3 BM",
-    "pvp.card.ruleReward": "승리 보상: 5 BM, 플랫폼 수수료 1 BM",
-    "pvp.card.ruleProfit": "순이익(승리 기준): +1 BM",
+    "pvp.card.ruleReward": "승리 보상: 5 BM",
     "pvp.card.ruleLoss": "패배 시 배팅 토큰 소멸",
     "pvp.card.recentTitle": "최근 전적",
     "pvp.card.recentNone": "아직 PVP 전적이 없습니다.",
@@ -244,11 +250,18 @@ const translations = {
     "app.brand": "Blockmon Battle Prototype",
     "system.starterCreated": "Starter Blockmon DNA created!",
     "system.adventureSummary":
-      "Adventure complete! Battles {{battles}}, captured {{captured}}, reward +{{tokens}} BM",
+      "Adventure complete! Battles {{battles}}, captured {{captured}}",
     "system.fusionCreated":
       "A new Blockmon has been born! Check your inventory.",
     "system.fusionFailed":
       "Fusion failed. Your success chance was {{chance}}%.",
+    "fusion.feedback.successTitle": "Fusion Complete!",
+    "fusion.feedback.successBody":
+      "{{name}} has joined your squad. (Species: {{species}})",
+    "fusion.feedback.failureTitle": "Fusion Failed",
+    "fusion.feedback.failureBody":
+      "Fusion destabilised and failed. (Success chance {{chance}}%)",
+    "fusion.feedback.close": "Dismiss",
     "system.pvpWin": "PVP match won! (Net gain +1 BM)",
     "system.pvpLose": "PVP match lost. You forfeited 3 BM.",
     "errors.noBlockmon": "No Blockmon owned.",
@@ -316,7 +329,7 @@ const translations = {
     "inventory.potionConfirm": "Received {{amount}} potions.",
     "inventory.potionError": "Not enough BM tokens.",
     "inventory.potionStock": "Potions held: {{value}}",
-    "pvp.error.selectTeam": "Select four Blockmon for PVP.",
+    "pvp.error.selectTeam": "Select at least one Blockmon for PVP.",
     "pvp.selection.title": "Choose up to four Blockmon",
     "adventure.log.potion": "Used a potion on {{name}} to restore health.",
     "adventure.prepTitle": "Adventure Prep",
@@ -413,8 +426,7 @@ const translations = {
     "pvp.card.tokens": "Tokens held: {{value}} BM",
     "pvp.card.rulesTitle": "Staking Rules",
     "pvp.card.ruleStake": "Stake: 3 BM",
-    "pvp.card.ruleReward": "Win reward: 5 BM, platform fee 1 BM",
-    "pvp.card.ruleProfit": "Net profit on win: +1 BM",
+    "pvp.card.ruleReward": "Win reward: 5 BM",
     "pvp.card.ruleLoss": "Stake is lost on defeat",
     "pvp.card.recentTitle": "Recent Record",
     "pvp.card.recentNone": "No PVP history yet.",

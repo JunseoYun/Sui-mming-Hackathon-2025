@@ -136,14 +136,6 @@ export default function Fusion({ gameState, actions }) {
       setSelected((prev) => prev.filter((id) => !usedIds.has(id)));
       const newborn = result.newborn?.result ?? result.newborn;
       setResultState({ type: 'success', blockmon: newborn });
-      if (typeof window !== "undefined") {
-        const localizedName =
-          localizeBlockmonName(newborn) || t("fusion.alert.title", { name: "Blockmon" });
-        const dnaInfo = newborn?.dna
-          ? `\n${t("fusion.alert.dna", { dna: newborn.dna })}`
-          : "";
-        window.alert(`${t("fusion.alert.title", { name: localizedName })}${dnaInfo}`);
-      }
     }
   };
 
