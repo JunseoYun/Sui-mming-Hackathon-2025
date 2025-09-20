@@ -205,6 +205,7 @@ function GameApp() {
   const [language, setLanguage] = useState("ko");
   const [fusionFeedback, setFusionFeedback] = useState(null);
   const [signing, setSigning] = useState({ strategy: "wallet", address: null });
+  const [starterAttempted, setStarterAttempted] = useState(false);
 
   const { client, network } = useSuiClientContext();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
@@ -298,6 +299,54 @@ function GameApp() {
           setBlockmons(all);
           setAdventureSelection((prev) => (prev?.length ? prev : all.slice(0, 4).map((m) => m.id)));
           setPvpSelection((prev) => (prev?.length ? prev : all.slice(0, 4).map((m) => m.id)));
+
+          // 최초 접속 시 보유 블록몬이 없다면, 가입 시 생성한 스타터 시드로 1마리 자동 민트
+          if (all.length === 0 && !starterAttempted && player?.starterSeed) {
+            try {
+              const base = createBlockmonFromSeed(BigInt(`0x${player.starterSeed}`), { origin: '스타터' });
+              const species = speciesCatalog.find((s) => s.name === base.species);
+              const monId = species?.id ?? base.species;
+              const res = await onchainCreateBlockMon({
+                executor,
+                packageId: pkg,
+                sender: owner,
+                monId,
+                name: base.name,
+                hp: Number(base.maxHp ?? base.hp ?? 0),
+                str: Number(base.stats?.str ?? 0),
+                dex: Number(base.stats?.dex ?? 0),
+                con: Number(base.stats?.con ?? 0),
+                int: Number(base.stats?.int ?? 0),
+                wis: Number(base.stats?.wis ?? 0),
+                cha: Number(base.stats?.cha ?? 0),
+                skillName: String(base.skill?.name ?? ''),
+                skillDescription: String(base.skill?.description ?? ''),
+                client,
+                signAndExecute,
+              });
+              const fullType = `${pkg}::blockmon::BlockMon`;
+              const objectId = extractCreatedByType(res, fullType);
+              if (objectId) {
+                try {
+                  const fetched = await getBlockMon(client, objectId);
+                  const mapped = mapOnchainToLocal({ data: fetched?.data ?? fetched });
+                  if (mapped) {
+                    setBlockmons([mapped]);
+                    setAdventureSelection([mapped.id]);
+                    setPvpSelection([mapped.id]);
+                  } else {
+                    setBlockmons([{ ...base, id: objectId, onchain: true }]);
+                  }
+                } catch (e) {
+                  setBlockmons([{ ...base, id: objectId, onchain: true }]);
+                }
+              }
+            } catch (e) {
+              console.error('[Onchain] starter mint failed', e);
+            } finally {
+              setStarterAttempted(true);
+            }
+          }
         }
       } catch (e) {
         console.error("[Onchain] load owned failed", e);
@@ -306,7 +355,7 @@ function GameApp() {
     return () => {
       cancelled = true;
     };
-  }, [client, signing.address, currentAccount?.address]);
+  }, [client, signing.address, currentAccount?.address, executor, starterAttempted, player?.starterSeed]);
 
   const appendSeed = (seedHex, context) => {
     setSeedHistory((prev) => [
@@ -320,17 +369,116 @@ function GameApp() {
   };
 
   const registerUser = (nickname) => {
+    const owner = signing.address ?? currentAccount?.address ?? null;
+    if (owner) {
+      (async () => {
+        try {
+          const pkg = resolvePackageId();
+          const res = await listOwnedBlockMons(client, owner, pkg, null, 50);
+          const all = (res?.data ?? []).map(mapOnchainToLocal).filter(Boolean);
+
+          if (all.length > 0) {
+            setPlayer({
+              nickname,
+              joinedAt: new Date().toISOString(),
+              starterSeed: undefined,
+            });
+            setTokens(10);
+            setBlockmons(all);
+            setAdventureSelection(all.slice(0, 4).map((m) => m.id));
+            setPvpSelection(all.slice(0, 4).map((m) => m.id));
+            setPotions(2);
+            setDnaVault([]);
+            setSystemMessage(null);
+            setCurrentPage("home");
+            return;
+          }
+
+          const starterSeed = generateSeed();
+          const starter = createBlockmonFromSeed(starterSeed, { origin: "스타터 DNA" });
+          setPlayer({
+            nickname,
+            joinedAt: new Date().toISOString(),
+            starterSeed: formatSeed(starterSeed),
+          });
+          setStarterAttempted(false);
+          setTokens(10);
+          setBlockmons([starter]);
+          setAdventureSelection([starter.id]);
+          setPvpSelection([starter.id]);
+          setPotions(2);
+          setDnaVault([
+            {
+              dna: starter.dna,
+              species: starter.species,
+              seed: starter.seed,
+              status: "활성",
+              acquiredAt: new Date().toISOString(),
+              note: "가입 보상",
+            },
+          ]);
+          appendSeed(formatSeed(starterSeed), "Starter DNA");
+          setSystemMessage({ key: "system.starterCreated" });
+          setCurrentPage("home");
+        } catch (e) {
+          console.error('[Onchain] registerUser chain-first failed', e);
+          const starterSeed = generateSeed();
+          const starter = createBlockmonFromSeed(starterSeed, { origin: "스타터 DNA" });
+          setPlayer({
+            nickname,
+            joinedAt: new Date().toISOString(),
+            starterSeed: formatSeed(starterSeed),
+          });
+          setStarterAttempted(false);
+          setTokens(10);
+          setBlockmons([starter]);
+          setAdventureSelection([starter.id]);
+          setPvpSelection([starter.id]);
+          setPotions(2);
+          setDnaVault([
+            {
+              dna: starter.dna,
+              species: starter.species,
+              seed: starter.seed,
+              status: "활성",
+              acquiredAt: new Date().toISOString(),
+              note: "가입 보상",
+            },
+          ]);
+          appendSeed(formatSeed(starterSeed), "Starter DNA");
+          setSystemMessage({ key: "system.starterCreated" });
+          setCurrentPage("home");
+        }
+      })();
+      return;
+    }
+
+    const starterSeed = generateSeed();
+    const starter = createBlockmonFromSeed(starterSeed, {
+      origin: "스타터 DNA",
+    });
     setPlayer({
       nickname,
       joinedAt: new Date().toISOString(),
-      starterSeed: undefined,
+      starterSeed: formatSeed(starterSeed),
     });
+    setStarterAttempted(false);
     setTokens(10);
-    setBlockmons([]);
-    setAdventureSelection([]);
-    setPvpSelection([]);
+    setBlockmons([starter]);
+    setAdventureSelection([starter.id]);
+    setPvpSelection([starter.id]);
     setPotions(2);
-    setDnaVault([]);
+    setDnaVault([
+      {
+        dna: starter.dna,
+        species: starter.species,
+        seed: starter.seed,
+        status: "활성",
+        acquiredAt: new Date().toISOString(),
+        note: "가입 보상",
+      },
+    ]);
+    appendSeed(formatSeed(starterSeed), "Starter DNA");
     setSystemMessage({ key: "system.starterCreated" });
     setCurrentPage("home");
   };

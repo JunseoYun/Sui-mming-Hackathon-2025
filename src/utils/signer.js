@@ -72,7 +72,7 @@ export function buildEnvKeyExecutor({ client, keypair }) {
   const hasTxBlock = !!(client && typeof client.signAndExecuteTransactionBlock === "function");
   const hasTx = !!(client && typeof client.signAndExecuteTransaction === "function");
   if (!hasTxBlock && !hasTx) {
-    throw new Error("client must implement signAndExecuteTransaction or signAndExecuteTransactionBlock");
+    // 최신 SDK에서는 executeTransactionBlock 경로만으로도 처리 가능하므로 강제 요구하지 않음
   }
   if (!keypair) {
     throw new Error("keypair is required for env-key executor");
@@ -84,6 +84,7 @@ export function buildEnvKeyExecutor({ client, keypair }) {
       tx = rebuilt;
     }
     tx.setSenderIfNotSet(getAddressFromKeypair(keypair));
+    // 1) 우선 signAndExecuteTransactionBlock 사용 가능 시 그대로 사용
     if (hasTxBlock) {
       return client.signAndExecuteTransactionBlock({
         signer: keypair,
@@ -91,9 +92,12 @@ export function buildEnvKeyExecutor({ client, keypair }) {
         options: { showEffects: true, showObjectChanges: true, showEvents: true },
       });
     }
-    return client.signAndExecuteTransaction({
-      signer: keypair,
-      transaction: tx,
+    // 2) 그 외에는 직접 빌드+서명 후 executeTransactionBlock 호출 (API 차이 회피)
+    const built = await tx.build({ client });
+    const { signature } = await keypair.signTransactionBlock(built);
+    return client.executeTransactionBlock({
+      transactionBlock: built,
+      signature,
       options: { showEffects: true, showObjectChanges: true, showEvents: true },
     });
   };
