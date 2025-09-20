@@ -78,6 +78,9 @@ import {
 import { useTea, TeaMsg, initialModel } from "./state/tea";
 import { createUiService } from "./services/ui";
 import { createInventoryService } from "./services/inventoryService";
+import { createPvpService } from "./services/pvpService";
+import { createFusionService } from "./services/fusionService";
+import { createAdventureService } from "./services/adventureService";
 
 // pages moved to routes/pages
 
@@ -1455,11 +1458,103 @@ function GameApp() {
     executor,
   }), [client, resolvePackageId, signing, currentAccount?.address, executor]);
 
+  const pvpService = useMemo(() => createPvpService({
+    getTokens: () => tokens,
+    setTokens,
+    getPvpSelection: () => pvpSelection,
+    getBlockmons: () => blockmons,
+    setPvpHistory,
+    setSystemMessage,
+    setCurrentPage,
+    languageRef: () => language,
+    rollBattleOutcome,
+    createBlockmonFromSeed,
+    generateSeed,
+    appendSeed,
+    client,
+    resolvePackageId,
+    listOwnedBMTokens,
+    onchainAddBMTokens,
+    onchainSubtractBMTokens,
+    getTotalBMTokenBalance,
+    signing,
+    currentAccount,
+    executor,
+  }), [tokens, pvpSelection, blockmons, language, executor, currentAccount?.address]);
+
+  const fusionService = useMemo(() => createFusionService({
+    getTokens: () => tokens,
+    setTokens,
+    getBlockmons: () => blockmons,
+    setBlockmons,
+    setAdventureSelection,
+    setPvpSelection,
+    setDnaVault,
+    setFusionHistory,
+    setSystemMessage,
+    setFusionFeedback,
+    languageRef: () => language,
+    fuseBlockmons,
+    speciesCatalog,
+    resolvePackageId,
+    onchainBurnMany,
+    onchainCreateBlockMon,
+    listOwnedBMTokens,
+    extractCreatedByType,
+    getBlockMon,
+    mapOnchainToLocal,
+    queueAndRetry,
+    enqueuePendingBurns,
+    client,
+    signing,
+    currentAccount,
+    executor,
+  }), [tokens, blockmons, language, executor, currentAccount?.address]);
+
+  const adventureService = useMemo(() => createAdventureService({
+    getBlockmons: () => blockmons,
+    getTokens: () => tokens,
+    getPotions: () => potions,
+    setPotions,
+    setSystemMessage,
+    setAdventure,
+    setBattle,
+    setBattleHistory,
+    setBlockmons,
+    setDnaVault,
+    appendSeed,
+    setCurrentPage,
+    languageRef: () => language,
+    getAdventureSelection: () => adventureSelection,
+    setAdventureSelection,
+    rollBattleOutcome,
+    resolvePackageId,
+    getTotalBMTokenBalance,
+    getTotalPotionCountByType,
+    listOwnedBMTokens,
+    listOwnedPotions,
+    onchainAddBMTokens,
+    onchainSubtractBMTokens,
+    onchainCreateBlockMon,
+    onchainCreateManyBlockMon,
+    extractCreatedByType,
+    extractCreatedManyByType,
+    getBlockMon,
+    queueAndRetry,
+    savePendingMints,
+    removeEntriesFromQueue,
+    speciesCatalog,
+    client,
+    executor,
+    signing,
+    currentAccount,
+  }), [blockmons, tokens, potions, adventureSelection, language, executor, currentAccount?.address]);
+
   const actions = {
     navigate,
-    startAdventure,
-    performFusion,
-    runPvpMatch,
+    startAdventure: adventureService.startAdventure,
+    performFusion: fusionService.performFusion,
+    runPvpMatch: pvpService.runPvpMatch,
     registerUser,
     executor,
     setAdventureSelection,
