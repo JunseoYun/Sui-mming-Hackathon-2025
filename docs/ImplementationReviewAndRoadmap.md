@@ -94,7 +94,7 @@
  
 
 ## Acceptance Checklist
-- [ ] [Now] 모든 온체인 경로에 `queueAndRetry` 적용 확인
+- [x] [Now] 모든 온체인 경로에 `queueAndRetry` 적용 확인
 - [ ] [Now] `inventory::transfer_*` 비사용 보장 및 코드 경고 주석 추가
 - [ ] [Now] 포션/BM 입력값 검증(음수/상한) 및 오류 메시지 연결
 - [ ] [Now] 앱 시작 시 보류 큐(민트/번) 자동 플러시 추가

@@ -10,6 +10,7 @@ export function createInventoryService({
   onchainAddBMTokens,
   onchainCreateBMToken,
   onchainSubtractBMTokens,
+  queueAndRetry,
   setPotions,
   setTokens,
   setSystemMessage,
@@ -29,9 +30,9 @@ export function createInventoryService({
       bmTokenId = first?.data?.objectId ?? first?.objectId ?? null;
     } catch (_) {}
     if (bmTokenId) {
-      await onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount, client });
+      await queueAndRetry('inventory.addBMTokens', async () => onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount, client }), { attempts: 4, baseDelayMs: 500 });
     } else {
-      await onchainCreateBMToken({ executor, packageId: pkg, sender: owner, amount, tokenType: 'BM', client });
+      await queueAndRetry('inventory.createBMToken', async () => onchainCreateBMToken({ executor, packageId: pkg, sender: owner, amount, tokenType: 'BM', client }), { attempts: 4, baseDelayMs: 500 });
     }
     const total = await getTotalBMTokenBalance(client, owner, pkg);
     if (Number.isFinite(total)) setTokens(total);
@@ -70,7 +71,7 @@ export function createInventoryService({
           const created = tx.moveCall({ target: `${pkg}::inventory::create_potion`, arguments: [tx.pure.string('HP'), tx.pure.u64(9999), tx.pure.u64(amount), tx.pure.string('HP Potion')] });
           tx.transferObjects([created], tx.pure.address(owner));
         }
-        const res = await executor(tx);
+        const res = await queueAndRetry('inventory.purchasePotions', async () => executor(tx), { attempts: 4, baseDelayMs: 500 });
         try {
           const digest = res?.digest || res?.effects?.transactionDigest || res?.effectsDigest;
           if (digest && typeof client.waitForTransactionBlock === 'function') {

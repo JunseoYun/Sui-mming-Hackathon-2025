@@ -21,6 +21,7 @@ export function createPvpService({
   onchainAddBMTokens,
   onchainSubtractBMTokens,
   getTotalBMTokenBalance,
+  queueAndRetry,
   signing,
   currentAccount,
   executor,
@@ -104,11 +105,11 @@ export function createPvpService({
           bmTokenId = firstBM?.data?.objectId ?? firstBM?.objectId ?? null;
           if (bmTokenId) {
             if (reward > 0) {
-              await onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount: reward, client });
+              await queueAndRetry('pvp.addBMTokens', async () => onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount: reward, client }), { attempts: 4, baseDelayMs: 600 });
             }
             const totalCost = fee + stake;
             if (totalCost > 0) {
-              await onchainSubtractBMTokens({ executor, packageId: pkg, bmTokenId, amount: totalCost, client });
+              await queueAndRetry('pvp.subtractBMTokens', async () => onchainSubtractBMTokens({ executor, packageId: pkg, bmTokenId, amount: totalCost, client }), { attempts: 4, baseDelayMs: 600 });
             }
           }
           const bmTotal = await getTotalBMTokenBalance(client, ownerForPvp, pkg);

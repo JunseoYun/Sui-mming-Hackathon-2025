@@ -1259,9 +1259,9 @@ function GameApp() {
             console.warn('[Onchain] listOwnedBMTokens failed, will try create', e);
           }
           if (bmTokenId) {
-            await onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount, client, signAndExecute });
+            await queueAndRetry('ui.purchaseTokens.addBM', async () => onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount, client, signAndExecute }), { attempts: 4, baseDelayMs: 600 });
           } else {
-            await onchainCreateBMToken({ executor, packageId: pkg, sender: owner, amount, tokenType: 'BM', client, signAndExecute });
+            await queueAndRetry('ui.purchaseTokens.createBM', async () => onchainCreateBMToken({ executor, packageId: pkg, sender: owner, amount, tokenType: 'BM', client, signAndExecute }), { attempts: 4, baseDelayMs: 600 });
           }
           // 체인 기준으로 동기화
           try {
@@ -1354,11 +1354,11 @@ function GameApp() {
           bmTokenId = firstBM?.data?.objectId ?? firstBM?.objectId ?? null;
           if (bmTokenId) {
             if (reward > 0) {
-              await onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount: reward, client, signAndExecute });
+              await queueAndRetry('ui.pvp.addBM', async () => onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount: reward, client, signAndExecute }), { attempts: 4, baseDelayMs: 600 });
             }
             const totalCost = fee + stake;
             if (totalCost > 0) {
-              await onchainSubtractBMTokens({ executor, packageId: pkg, bmTokenId, amount: totalCost, client, signAndExecute });
+              await queueAndRetry('ui.pvp.subBM', async () => onchainSubtractBMTokens({ executor, packageId: pkg, bmTokenId, amount: totalCost, client, signAndExecute }), { attempts: 4, baseDelayMs: 600 });
             }
           }
           const bmTotal = await getTotalBMTokenBalance(client, ownerForPvp, pkg);
@@ -1449,6 +1449,7 @@ function GameApp() {
     onchainAddBMTokens,
     onchainCreateBMToken,
     onchainSubtractBMTokens,
+    queueAndRetry,
     setPotions,
     setTokens,
     setSystemMessage,
@@ -1477,6 +1478,7 @@ function GameApp() {
     onchainAddBMTokens,
     onchainSubtractBMTokens,
     getTotalBMTokenBalance,
+    queueAndRetry,
     signing,
     currentAccount,
     executor,
