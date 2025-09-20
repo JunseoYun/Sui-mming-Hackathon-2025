@@ -32,6 +32,7 @@ export default function Signup({ onRegister, t }) {
   };
 
   const handleSuccess = async (credentialResponse) => {
+    // console.log(credentialResponse);
     console.log(credentialResponse);
     const idToken = credentialResponse.credential;
     const decoded = decodeJWT(idToken);
