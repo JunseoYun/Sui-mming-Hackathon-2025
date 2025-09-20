@@ -61,8 +61,8 @@ export default function Inventory({ gameState, actions }) {
                 {potionOptions.map(({ amount, cost }) => (
                   <button
                     key={amount}
-                    onClick={() => {
-                      const result = actions.purchasePotions(amount, cost)
+                    onClick={async () => {
+                      const result = await actions.purchasePotions(amount, cost)
                       if (!result?.error) {
                         setPotionPanel(false)
                       }

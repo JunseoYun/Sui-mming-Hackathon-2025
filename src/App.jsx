@@ -33,6 +33,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { isEnokiNetwork, registerEnokiWallets } from "@mysten/enoki";
 import FusionFeedback from "./components/FusionFeedback";
 import { getFullnodeUrl } from "@mysten/sui.js/client";
+import { TransactionBlock } from "@mysten/sui.js/transactions";
 import {
   detectSigningStrategy,
   createEnvKeypairFromEnv,
@@ -49,6 +50,20 @@ import {
   resolvePackageId,
 } from "./utils/blockmon";
 import { catalog as speciesCatalog } from "./utils/random";
+import {
+  listOwnedPotions,
+  createPotion as onchainCreatePotion,
+  addPotions as onchainAddPotions,
+  getTotalPotionCountByType,
+  usePotion as onchainUsePotion,
+} from "./utils/inventory";
+import {
+  listOwnedBMTokens,
+  createBMToken as onchainCreateBMToken,
+  addBMTokens as onchainAddBMTokens,
+  subtractBMTokens as onchainSubtractBMTokens,
+  getTotalBMTokenBalance,
+} from "./utils/inventory";
 
 const pages = {
   home: { labelKey: "nav.home", component: Home, showInNav: true },
@@ -198,11 +213,12 @@ function GameApp() {
   const [systemMessage, setSystemMessage] = useState(null);
   const [adventureSelection, setAdventureSelection] = useState([]);
   const [pvpSelection, setPvpSelection] = useState([]);
-  const [potions, setPotions] = useState(2);
+  const [potions, setPotions] = useState(0);
   const [language, setLanguage] = useState("ko");
   const [fusionFeedback, setFusionFeedback] = useState(null);
   const [signing, setSigning] = useState({ strategy: "wallet", address: null });
   const [starterAttempted, setStarterAttempted] = useState(false);
+  const [purchasingPotion, setPurchasingPotion] = useState(false);
 
   const { client, network } = useSuiClientContext();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
@@ -365,6 +381,39 @@ function GameApp() {
     };
   }, [client, signing.address, currentAccount?.address, executor, starterAttempted, player?.starterSeed]);
 
+  // 주소가 준비되면 온체인 포션 총합을 로드하여 동기화
+  useEffect(() => {
+    const owner = signing.address ?? currentAccount?.address ?? null;
+    if (!owner) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const pkg = resolvePackageId();
+        // BM 토큰 총합 동기화
+        try {
+          const bmTotal = await getTotalBMTokenBalance(client, owner, pkg);
+          if (!cancelled && Number.isFinite(bmTotal)) {
+            setTokens(bmTotal);
+          }
+        } catch (e) {
+          console.error("[Onchain] load BM tokens failed", e);
+        }
+        // 포션 총합 동기화 (읽기 종단일관성 고려: 짧은 재시도)
+        let total = await getTotalPotionCountByType(client, owner, pkg, "HP");
+        for (let i = 0; i < 3 && (!Number.isFinite(total)); i++) {
+          await new Promise((r) => setTimeout(r, 300));
+          total = await getTotalPotionCountByType(client, owner, pkg, "HP");
+        }
+        if (!cancelled && Number.isFinite(total)) setPotions(total);
+      } catch (e) {
+        console.error("[Onchain] load potions failed", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [client, signing.address, currentAccount?.address]);
+
   const appendSeed = (seedHex, context) => {
     setSeedHistory((prev) => [
       ...prev,
@@ -391,11 +440,11 @@ function GameApp() {
               joinedAt: new Date().toISOString(),
               starterSeed: undefined,
             });
-            setTokens(10);
+            // BM 토큰은 온체인에서 동기화
             setBlockmons(all);
             setAdventureSelection(all.slice(0, 4).map((m) => m.id));
             setPvpSelection(all.slice(0, 4).map((m) => m.id));
-            setPotions(2);
+            // 포션은 온체인에서 동기화
             setDnaVault([]);
             setSystemMessage(null);
             setCurrentPage("home");
@@ -410,11 +459,11 @@ function GameApp() {
             starterSeed: formatSeed(starterSeed),
           });
           setStarterAttempted(false);
-          setTokens(10);
+          // BM 토큰은 온체인에서 동기화
           setBlockmons([starter]);
           setAdventureSelection([starter.id]);
           setPvpSelection([starter.id]);
-          setPotions(2);
+          // 포션은 온체인에서 동기화
           setDnaVault([
             {
               dna: starter.dna,
@@ -438,11 +487,11 @@ function GameApp() {
             starterSeed: formatSeed(starterSeed),
           });
           setStarterAttempted(false);
-          setTokens(10);
+          // BM 토큰은 온체인에서 동기화
           setBlockmons([starter]);
           setAdventureSelection([starter.id]);
           setPvpSelection([starter.id]);
-          setPotions(2);
+          // 포션은 온체인에서 동기화
           setDnaVault([
             {
               dna: starter.dna,
@@ -471,11 +520,11 @@ function GameApp() {
       starterSeed: formatSeed(starterSeed),
     });
     setStarterAttempted(false);
-    setTokens(10);
+    // BM 토큰은 온체인에서 동기화
     setBlockmons([starter]);
     setAdventureSelection([starter.id]);
     setPvpSelection([starter.id]);
-    setPotions(2);
+    // 포션은 온체인에서 동기화
     setDnaVault([
       {
         dna: starter.dna,
@@ -777,6 +826,29 @@ function GameApp() {
     }
 
     setTokens((prev) => prev - 1 + tokensEarned);
+    // 온체인 BM 토큰 반영 (비동기): 모험 시작 1 소모, 보상 tokensEarned 추가
+    const ownerForTokens = signing.address ?? currentAccount?.address ?? null;
+    if (ownerForTokens) {
+      (async () => {
+        try {
+          const pkg = resolvePackageId();
+          let bmTokenId = null;
+          const resBM = await listOwnedBMTokens(client, ownerForTokens, pkg, null, 50);
+          const firstBM = (resBM?.data ?? [])[0];
+          bmTokenId = firstBM?.data?.objectId ?? firstBM?.objectId ?? null;
+          if (bmTokenId) {
+            if (tokensEarned > 0) {
+              await onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount: tokensEarned, client, signAndExecute });
+            }
+            await onchainSubtractBMTokens({ executor, packageId: pkg, bmTokenId, amount: 1, client, signAndExecute });
+          }
+          const bmTotal = await getTotalBMTokenBalance(client, ownerForTokens, pkg);
+          if (Number.isFinite(bmTotal)) setTokens(bmTotal);
+        } catch (e) {
+          console.error('[Onchain] reflect BM after adventure failed', e);
+        }
+      })();
+    }
     setAdventure(adventureState);
     setBattle(battleRecords[battleRecords.length - 1] ?? null);
     setBattleHistory((prev) => [...prev, ...battleRecords]);
@@ -836,6 +908,46 @@ function GameApp() {
           }
         } catch (e) {
           console.error('[Onchain] mint captured failed', e);
+        }
+      })();
+    }
+    
+    // 온체인 포션 사용 반영 (비동기 실행)
+    if (owner && potionsUsed > 0) {
+      (async () => {
+        try {
+          const pkg = resolvePackageId();
+          // HP 포션 객체 찾기
+          let potionId = null;
+          try {
+            const res = await listOwnedPotions(client, owner, pkg, null, 50);
+            const hpEntry = (res?.data ?? []).find((item) => {
+              const fields = item?.data?.content?.fields ?? item?.content?.fields;
+              return fields?.potion_type === 'HP';
+            });
+            potionId = hpEntry?.data?.objectId ?? hpEntry?.objectId ?? null;
+          } catch (e) {
+            console.warn('[Onchain] listOwnedPotions for use failed', e);
+          }
+          if (potionId) {
+            await onchainUsePotion({
+              executor,
+              packageId: pkg,
+              potionId,
+              quantity: potionsUsed,
+              client,
+              signAndExecute,
+            });
+          }
+          // 체인 기준으로 동기화
+          try {
+            const total = await getTotalPotionCountByType(client, owner, pkg, 'HP');
+            if (Number.isFinite(total)) setPotions(total);
+          } catch (e) {
+            console.warn('[Onchain] refresh potions after use failed', e);
+          }
+        } catch (e) {
+          console.error('[Onchain] reflect potions used failed', e);
         }
       })();
     }
@@ -1031,6 +1143,38 @@ function GameApp() {
   const purchaseTokens = (amount) => {
     setTokens((prev) => prev + amount);
     setSystemMessage({ key: 'token.purchaseConfirm', params: { amount } });
+    // 온체인 반영 (비동기): BM 토큰 add 또는 create
+    const owner = signing.address ?? currentAccount?.address ?? null;
+    if (owner) {
+      (async () => {
+        try {
+          const pkg = resolvePackageId();
+          // 기존 BMToken 객체 탐색
+          let bmTokenId = null;
+          try {
+            const res = await listOwnedBMTokens(client, owner, pkg, null, 50);
+            const first = (res?.data ?? [])[0];
+            bmTokenId = first?.data?.objectId ?? first?.objectId ?? null;
+          } catch (e) {
+            console.warn('[Onchain] listOwnedBMTokens failed, will try create', e);
+          }
+          if (bmTokenId) {
+            await onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount, client, signAndExecute });
+          } else {
+            await onchainCreateBMToken({ executor, packageId: pkg, sender: owner, amount, tokenType: 'BM', client, signAndExecute });
+          }
+          // 체인 기준으로 동기화
+          try {
+            const total = await getTotalBMTokenBalance(client, owner, pkg);
+            if (Number.isFinite(total)) setTokens(total);
+          } catch (e) {
+            console.warn('[Onchain] refresh BM total failed', e);
+          }
+        } catch (e) {
+          console.error('[Onchain] purchaseTokens failed', e);
+        }
+      })();
+    }
   };
 
   const runPvpMatch = () => {
@@ -1098,6 +1242,32 @@ function GameApp() {
     const netTokens = reward - fee - stake;
 
     setTokens((prev) => prev + netTokens);
+    // 온체인 BM 토큰 반영 (비동기): PVP 스테이크/보상/수수료 정산
+    const ownerForPvp = signing.address ?? currentAccount?.address ?? null;
+    if (ownerForPvp) {
+      (async () => {
+        try {
+          const pkg = resolvePackageId();
+          let bmTokenId = null;
+          const resBM = await listOwnedBMTokens(client, ownerForPvp, pkg, null, 50);
+          const firstBM = (resBM?.data ?? [])[0];
+          bmTokenId = firstBM?.data?.objectId ?? firstBM?.objectId ?? null;
+          if (bmTokenId) {
+            if (reward > 0) {
+              await onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount: reward, client, signAndExecute });
+            }
+            const totalCost = fee + stake;
+            if (totalCost > 0) {
+              await onchainSubtractBMTokens({ executor, packageId: pkg, bmTokenId, amount: totalCost, client, signAndExecute });
+            }
+          }
+          const bmTotal = await getTotalBMTokenBalance(client, ownerForPvp, pkg);
+          if (Number.isFinite(bmTotal)) setTokens(bmTotal);
+        } catch (e) {
+          console.error('[Onchain] reflect BM after PVP failed', e);
+        }
+      })();
+    }
     appendSeed(formatSeed(opponentSeed), "PVP Match");
 
     const record = {
@@ -1180,15 +1350,100 @@ function GameApp() {
     setPvpSelection,
     setLanguage,
     purchaseTokens,
-    purchasePotions: (amount, cost) => {
+    purchasePotions: async (amount, cost) => {
+      if (purchasingPotion) return { error: 'busy' };
       if (tokens < cost) {
         setSystemMessage({ key: 'inventory.potionError' });
         return { error: "insufficient tokens" };
       }
-      setTokens((prev) => prev - cost);
-      setPotions((prev) => prev + amount);
-      setSystemMessage({ key: 'inventory.potionConfirm', params: { amount } });
-      return { success: true };
+      setPurchasingPotion(true);
+      // 온체인 반영 (비동기 실행)
+      const owner = signing.address ?? currentAccount?.address ?? null;
+      try {
+        if (owner) {
+          try {
+            const pkg = resolvePackageId();
+            // BM 차감 + 포션 add/create를 단일 트랜잭션으로 처리 (가스 코인 버전 충돌 회피)
+            const beforeTotal = await getTotalPotionCountByType(client, owner, pkg, 'HP');
+            let bmTokenId = null;
+            let potionId = null;
+            try {
+              const resBM = await listOwnedBMTokens(client, owner, pkg, null, 50);
+              const firstBM = (resBM?.data ?? [])[0];
+              bmTokenId = firstBM?.data?.objectId ?? firstBM?.objectId ?? null;
+            } catch (e) {
+              console.warn('[Onchain] listOwnedBMTokens failed', e);
+            }
+            try {
+              const res = await listOwnedPotions(client, owner, pkg, null, 50);
+              const hpEntry = (res?.data ?? []).find((item) => {
+                const fields = item?.data?.content?.fields ?? item?.content?.fields;
+                return fields?.potion_type === 'HP';
+              });
+              potionId = hpEntry?.data?.objectId ?? hpEntry?.objectId ?? null;
+            } catch (e) {
+              console.warn('[Onchain] listOwnedPotions failed', e);
+            }
+
+            const tx = new TransactionBlock();
+            if (bmTokenId) {
+              tx.moveCall({
+                target: `${pkg}::inventory::subtract_bm_tokens`,
+                arguments: [tx.object(bmTokenId), tx.pure.u64(cost)],
+              });
+            }
+            if (potionId) {
+              tx.moveCall({
+                target: `${pkg}::inventory::add_potions`,
+                arguments: [tx.object(potionId), tx.pure.u64(amount)],
+              });
+            } else {
+              const created = tx.moveCall({
+                target: `${pkg}::inventory::create_potion`,
+                arguments: [
+                  tx.pure.string('HP'),
+                  tx.pure.u64(9999),
+                  tx.pure.u64(amount),
+                  tx.pure.string('HP Potion'),
+                ],
+              });
+              tx.transferObjects([created], tx.pure.address(owner));
+            }
+            const res = await executor(tx);
+            try {
+              const digest = res?.digest || res?.effects?.transactionDigest || res?.effectsDigest;
+              if (digest && typeof client.waitForTransactionBlock === 'function') {
+                await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true } });
+              }
+            } catch (_) {}
+
+            // 체인 기준으로 동기화
+            try {
+              let total = await getTotalPotionCountByType(client, owner, pkg, 'HP');
+              const expected = Number(beforeTotal ?? 0) + Number(amount ?? 0);
+              // 최종성 전파 대기: 기대치에 도달할 때까지 짧게 재시도
+              for (let i = 0; i < 5 && Number.isFinite(expected) && total < expected; i++) {
+                await new Promise((r) => setTimeout(r, 400));
+                total = await getTotalPotionCountByType(client, owner, pkg, 'HP');
+              }
+              if (Number.isFinite(total)) setPotions(total);
+              const bmTotal = await getTotalBMTokenBalance(client, owner, pkg);
+              if (Number.isFinite(bmTotal)) setTokens(bmTotal);
+            } catch (e) {
+              console.warn('[Onchain] refresh potions total failed', e);
+            }
+          } catch (e) {
+            console.error('[Onchain] purchasePotions failed', e);
+            setPurchasingPotion(false);
+            return { error: String(e?.message || e) };
+          }
+        }
+        setSystemMessage({ key: 'inventory.potionConfirm', params: { amount } });
+        setPurchasingPotion(false);
+        return { success: true };
+      } finally {
+        setPurchasingPotion(false);
+      }
     },
   };
 
