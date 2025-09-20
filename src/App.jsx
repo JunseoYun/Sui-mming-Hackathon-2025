@@ -1306,7 +1306,14 @@ function GameApp() {
               .filter((p) => p.id && p.id !== dominant.id && /^0x[0-9a-fA-F]+$/.test(p.id))
               .map((p) => p.id);
             if (burnIds.length > 0) {
-              await onchainBurnMany({ executor, packageId: pkg, blockmonIds: burnIds, client, signAndExecute });
+              logTxStart('fusionFail.burnMany', { size: burnIds.length });
+              try {
+                await queueAndRetry('fusionFail.burnMany', async () => onchainBurnMany({ executor, packageId: pkg, blockmonIds: burnIds, client, signAndExecute }), { attempts: 4, baseDelayMs: 700 });
+                logTxSuccess('fusionFail.burnMany', { digest: null }, { size: burnIds.length });
+              } catch (err) {
+                logTxError('fusionFail.burnMany', err, { size: burnIds.length, enqueued: true });
+                enqueuePendingBurns(burnIds);
+              }
             }
           } catch (e) {
             console.error('[Onchain] fusion-fail burn failed', e);
