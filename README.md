@@ -65,6 +65,9 @@ npm run dev
 
 ---
 
+## Known Risks & Mitigations
+- 자세한 내용은 다음 문서 섹션을 참고하세요: [Implementation Review and Roadmap - Known Risks & Mitigations](docs/ImplementationReviewAndRoadmap.md#known-risks--mitigations)
+
 ## Vite 템플릿 참고
 - HMR, ESLint 설정 포함
 - 플러그인: [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react)

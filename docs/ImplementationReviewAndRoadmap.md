@@ -98,7 +98,7 @@
 - [x] [Now] `inventory::transfer_*` 비사용 보장 및 코드 경고 주석 추가
 - [x] [Now] 포션/BM 입력값 검증(음수/상한) 및 오류 메시지 연결
 - [x] [Now] 앱 시작 시 보류 큐(민트/번) 자동 플러시 추가
-- [ ] [Now] README에 "Known Risks & Mitigations" 링크 노출
+- [x] [Now] README에 "Known Risks & Mitigations" 링크 노출
 - [ ] BM → `Coin<BM>` 전환 및 관련 서비스 리팩토링
 - [ ] `owner` 필드/`transfer_*` 제거 및 실제 전송 로직 적용
 - [ ] `AdminCap/StoreCap` 설계/배포/검증 경로 추가
