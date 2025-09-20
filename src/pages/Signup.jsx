@@ -12,7 +12,9 @@ export default function Signup({ onRegister, t }) {
   const currentAccount = useCurrentAccount();
   const { mutate: connect, isPending: isConnecting } = useConnectWallet();
   const enokiWallets = useWallets().filter(isEnokiWallet);
-  const googleWallet = enokiWallets.find((wallet) => wallet.provider === "google");
+  const googleWallet = enokiWallets.find(
+    (wallet) => wallet.provider === "google"
+  );
 
   const formatAddress = (address) =>
     `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -57,7 +59,13 @@ export default function Signup({ onRegister, t }) {
                 xmlns="http://www.w3.org/2000/svg"
               >
                 <defs>
-                  <linearGradient id="suiGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <linearGradient
+                    id="suiGradient"
+                    x1="0%"
+                    y1="0%"
+                    x2="100%"
+                    y2="100%"
+                  >
                     <stop offset="0%" stopColor="#8ae2ff" />
                     <stop offset="100%" stopColor="#7468ff" />
                   </linearGradient>

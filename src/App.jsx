@@ -174,7 +174,7 @@ function GameApp() {
   const [fusionHistory, setFusionHistory] = useState([]);
   const [pvpHistory, setPvpHistory] = useState([]);
   const [currentPage, setCurrentPage] = useState("home");
-  const [systemMessage, setSystemMessage] = useState("");
+  const [systemMessage, setSystemMessage] = useState(null);
   const [adventureSelection, setAdventureSelection] = useState([]);
   const [pvpSelection, setPvpSelection] = useState([]);
   const [potions, setPotions] = useState(2);
@@ -223,14 +223,14 @@ function GameApp() {
       },
     ]);
     appendSeed(formatSeed(starterSeed), "Starter DNA");
-    setSystemMessage(t("system.starterCreated"));
+    setSystemMessage({ key: "system.starterCreated" });
     setCurrentPage("home");
   };
 
   const navigate = (pageKey) => {
     if (pages[pageKey]) {
       setCurrentPage(pageKey);
-      setSystemMessage("");
+      setSystemMessage(null);
     }
   };
 
@@ -516,13 +516,14 @@ function GameApp() {
     setAdventure(adventureState);
     setBattle(battleRecords[battleRecords.length - 1] ?? null);
     setBattleHistory((prev) => [...prev, ...battleRecords]);
-    setSystemMessage(
-      t('system.adventureSummary', {
+    setSystemMessage({
+      key: 'system.adventureSummary',
+      params: {
         battles: battleRecords.length,
         captured: capturedMonsters.length,
         tokens: tokensEarned,
-      }),
-    );
+      },
+    });
     setCurrentPage('adventure');
     return { success: true };
   };
@@ -531,7 +532,7 @@ function GameApp() {
   const performFusion = (parentIds) => {
     const uniqueIds = Array.from(new Set(parentIds)).filter(Boolean);
     if (uniqueIds.length < 2) {
-      return { error: t('fusion.error.selectTwo') };
+      return { error: { key: 'fusion.error.selectTwo' } };
     }
 
     const parents = uniqueIds
@@ -539,18 +540,18 @@ function GameApp() {
       .filter(Boolean);
 
     if (parents.length !== uniqueIds.length) {
-      return { error: t('errors.missingSelected') };
+      return { error: { key: 'errors.missingSelected' } };
     }
 
     const baseSpecies = parents[0].species;
     if (!parents.every((parent) => parent.species === baseSpecies)) {
-      return { error: t('errors.sameSpeciesFusion') };
+      return { error: { key: 'errors.sameSpeciesFusion' } };
     }
 
     const { cost: tokenCost, successChance } = evaluateFusionRecipe(parents);
     const chancePercent = Math.round(successChance * 100);
     if (tokens < tokenCost) {
-      return { error: t('fusion.error.cost', { cost: tokenCost }) };
+      return { error: { key: 'fusion.error.cost', params: { cost: tokenCost } } };
     }
 
     const fusionSeed = generateSeed();
@@ -588,11 +589,19 @@ function GameApp() {
         successChance,
       };
       setFusionHistory((prev) => [...prev, failureRecord]);
-      setSystemMessage(t('system.fusionFailed', { chance: chancePercent }));
+      setSystemMessage({
+        key: 'system.fusionFailed',
+        params: { chance: chancePercent },
+      });
       if (typeof window !== 'undefined') {
         window.alert(t('fusion.alert.failure', { chance: chancePercent }));
       }
-      return { error: t('fusion.error.failure', { chance: chancePercent }) };
+      return {
+        error: {
+          key: 'fusion.error.failure',
+          params: { chance: chancePercent },
+        },
+      };
     }
 
     const newborn = fuseBlockmons(parents, fusionSeed);
@@ -629,13 +638,13 @@ function GameApp() {
       successChance,
     };
     setFusionHistory((prev) => [...prev, record]);
-    setSystemMessage(t('system.fusionCreated'));
+    setSystemMessage({ key: 'system.fusionCreated' });
     return { success: true, newborn: record };
   };
 
   const purchaseTokens = (amount) => {
     setTokens((prev) => prev + amount);
-    setSystemMessage(t("token.purchaseConfirm", { amount }));
+    setSystemMessage({ key: 'token.purchaseConfirm', params: { amount } });
   };
 
   const runPvpMatch = () => {
@@ -726,9 +735,9 @@ function GameApp() {
     };
 
     setPvpHistory((prev) => [...prev, record]);
-    setSystemMessage(
-      result.outcome === "win" ? t("system.pveWin") : t("system.pveLose")
-    );
+    setSystemMessage({
+      key: result.outcome === 'win' ? 'system.pveWin' : 'system.pveLose',
+    });
     setCurrentPage("pvp");
     return { success: true, record };
   };
@@ -784,12 +793,12 @@ function GameApp() {
     purchaseTokens,
     purchasePotions: (amount, cost) => {
       if (tokens < cost) {
-        setSystemMessage(t("inventory.potionError"));
+        setSystemMessage({ key: 'inventory.potionError' });
         return { error: "insufficient tokens" };
       }
       setTokens((prev) => prev - cost);
       setPotions((prev) => prev + amount);
-      setSystemMessage(t("inventory.potionConfirm", { amount }));
+      setSystemMessage({ key: 'inventory.potionConfirm', params: { amount } });
       return { success: true };
     },
   };
@@ -797,6 +806,10 @@ function GameApp() {
   const navItems = Object.entries(pages).filter(
     ([, page]) => page.showInNav !== false
   );
+
+  const resolvedSystemMessage = systemMessage
+    ? t(systemMessage.key, systemMessage.params)
+    : '';
 
   const header = (
     <header className="app__top">
@@ -848,7 +861,7 @@ function GameApp() {
     <div className="app">
       {header}
 
-      {systemMessage && <div className="app__notice">{systemMessage}</div>}
+      {resolvedSystemMessage && <div className="app__notice">{resolvedSystemMessage}</div>}
 
       <main className="app__content">
         <CurrentComponent gameState={gameState} actions={actions} />

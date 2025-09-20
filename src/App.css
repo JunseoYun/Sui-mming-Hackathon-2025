@@ -598,6 +598,14 @@
   color: rgba(255, 255, 255, 0.7);
 }
 
+.fusion__warning {
+  margin: 6px 0 0 auto;
+  font-size: 0.8rem;
+  color: rgba(255, 128, 128, 0.9);
+  text-align: right;
+  max-width: 380px;
+}
+
 .fusion__execute {
   background: linear-gradient(135deg, #8b50ff, #6f74ff);
   border: none;

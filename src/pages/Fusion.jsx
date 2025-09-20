@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import BlockmonCard from "../components/BlockmonCard";
 import { translateSpecies } from "../i18n";
 import { fuseBlockmons, evaluateFusionRecipe } from "../utils/random";
@@ -6,12 +6,12 @@ import { fuseBlockmons, evaluateFusionRecipe } from "../utils/random";
 export default function Fusion({ gameState, actions }) {
   const { blockmons, tokens, language, t } = gameState;
   const [selected, setSelected] = useState([]);
-  const [error, setError] = useState("");
-  const [resultMessage, setResultMessage] = useState("");
+  const [error, setError] = useState(null);
+  const [resultState, setResultState] = useState(null);
 
   const handleSelect = (blockmon) => {
-    setResultMessage("");
-    setError("");
+    setResultState(null);
+    setError(null);
     setSelected((current) => {
       if (current.includes(blockmon.id)) {
         return current.filter((id) => id !== blockmon.id);
@@ -57,8 +57,8 @@ export default function Fusion({ gameState, actions }) {
   );
 
   const handleQuickSelect = (species) => {
-    setResultMessage("");
-    setError("");
+    setResultState(null);
+    setError(null);
     const group = speciesGroups.find((entry) => entry.species === species);
     if (!group) return;
     setSelected((current) => {
@@ -90,6 +90,21 @@ export default function Fusion({ gameState, actions }) {
   const successChance = fusionMetrics.successChance;
   const successPercent = Math.round(successChance * 100);
 
+  const localizeBlockmonName = useCallback((blockmon) => {
+    if (!blockmon) return "";
+    if (language !== "en") {
+      return blockmon.name ?? "";
+    }
+    const raw = blockmon.name ?? "";
+    const [base, suffix] = raw.split('-', 2);
+    const translatedBase =
+      translateSpecies(base, language) || translateSpecies(blockmon.species, language);
+    if (!suffix) {
+      return translatedBase;
+    }
+    return `${translatedBase}-${suffix}`;
+  }, [language]);
+
   const preview = useMemo(() => {
     if (!fusionValid) return null;
     try {
@@ -120,16 +135,14 @@ export default function Fusion({ gameState, actions }) {
       const usedIds = new Set(selectedBlockmons.map((blockmon) => blockmon.id));
       setSelected((prev) => prev.filter((id) => !usedIds.has(id)));
       const newborn = result.newborn?.result ?? result.newborn;
-      const newbornName =
-        newborn?.name ?? t("fusion.alert.title", { name: "Blockmon" });
-      setResultMessage(t("fusion.result.message", { name: newbornName }));
+      setResultState({ type: 'success', blockmon: newborn });
       if (typeof window !== "undefined") {
+        const localizedName =
+          localizeBlockmonName(newborn) || t("fusion.alert.title", { name: "Blockmon" });
         const dnaInfo = newborn?.dna
           ? `\n${t("fusion.alert.dna", { dna: newborn.dna })}`
           : "";
-        window.alert(
-          `${t("fusion.alert.title", { name: newbornName })}${dnaInfo}`
-        );
+        window.alert(`${t("fusion.alert.title", { name: localizedName })}${dnaInfo}`);
       }
     }
   };
@@ -137,6 +150,18 @@ export default function Fusion({ gameState, actions }) {
   const fusionButtonLabel = fusionValid
     ? t("fusion.button.executeDynamic", { cost: fusionCost })
     : t("fusion.button.execute");
+
+  const localizedResultMessage = useMemo(() => {
+    if (!resultState?.blockmon) return '';
+    return t('fusion.result.message', {
+      name: localizeBlockmonName(resultState.blockmon),
+    });
+  }, [resultState, localizeBlockmonName, t]);
+
+  const localizedError = useMemo(() => {
+    if (!error?.key) return '';
+    return t(error.key, error.params);
+  }, [error, t]);
 
   return (
     <div className="page page--fusion">
@@ -164,6 +189,9 @@ export default function Fusion({ gameState, actions }) {
             </button>
           </div>
         </div>
+        {fusionValid && (
+          <p className="fusion__warning">{t('fusion.warning.failurePenalty')}</p>
+        )}
         <p>{t("fusion.tokens", { value: tokens })}</p>
         {speciesGroups.length > 0 && (
           <div className="fusion__quick-select">
@@ -232,8 +260,8 @@ export default function Fusion({ gameState, actions }) {
         )}
       </section>
 
-      {error && <p className="page__error">{error}</p>}
-      {resultMessage && <p>{resultMessage}</p>}
+      {localizedError && <p className="page__error">{localizedError}</p>}
+      {localizedResultMessage && <p>{localizedResultMessage}</p>}
 
       <div className="fusion__actions">
         <button onClick={() => actions.navigate("home")}>

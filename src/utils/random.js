@@ -234,11 +234,11 @@ export function evaluateFusionRecipe(parents) {
   const dominantPower = dominant?.power ?? 0;
   const count = parents.length;
   const baseCost = Math.max(1, count - 1);
-  const powerCost = Math.max(0, Math.floor(dominantPower / 120));
+  const powerCost = Math.max(0, Math.floor(dominantPower / 150));
   const cost = baseCost + powerCost;
 
-  const rawChance = 0.96 - dominantPower / 420 - (count - 2) * 0.06;
-  const successChance = Math.min(0.92, Math.max(0.18, rawChance));
+  const rawChance = 0.98 - dominantPower / 520 - (count - 2) * 0.05;
+  const successChance = Math.min(0.95, Math.max(0.25, rawChance));
 
   return { cost, successChance, dominantPower };
 }
