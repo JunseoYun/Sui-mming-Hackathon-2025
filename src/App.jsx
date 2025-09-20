@@ -1605,11 +1605,12 @@ function GameApp() {
         gameState={gameState}
         actions={{ ...actions, registerUser }}
         fusionFeedbackSlot={null}
-        showChainLogSlot={
+        contentSlot={
           <main className="app__content">
             <Signup onRegister={registerUser} language={language} t={t} signing={signing} />
           </main>
         }
+        showChainLogSlot={null}
       />
     );
   }

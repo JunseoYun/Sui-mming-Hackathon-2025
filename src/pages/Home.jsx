@@ -60,6 +60,8 @@ export default function Home({ gameState, actions }) {
     return blockmons;
   }, [blockmons, sortKey]);
 
+  const displayName = player?.nickname ?? (language === "en" ? "Trainer" : "트레이너");
+
   const handleStartAdventure = () => {
     setError("");
     if (tokens < 1) {
@@ -134,7 +136,7 @@ export default function Home({ gameState, actions }) {
   return (
     <div className="page page--home">
       <header className="page__header">
-        <h1>{t("home.title", { name: player.nickname })}</h1>
+        <h1>{t("home.title", { name: displayName })}</h1>
         <p className="page__subtitle">{t("home.subtitle")}</p>
         <div className="home__language-toggle">
           <button

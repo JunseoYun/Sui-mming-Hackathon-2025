@@ -2,7 +2,7 @@ import React from "react";
 import AppHeader from "./AppHeader";
 import RouterView from "./RouterView";
 
-export default function AppView({ t, player, navItems, currentPage, onNavigate, language, onSetLanguage, systemMessage, pages, gameState, actions, showChainLogSlot, fusionFeedbackSlot }) {
+export default function AppView({ t, player, navItems, currentPage, onNavigate, language, onSetLanguage, systemMessage, pages, gameState, actions, showChainLogSlot, fusionFeedbackSlot, contentSlot }) {
   const resolvedNotice = systemMessage?.key ? t(systemMessage.key, systemMessage.params) : "";
   return (
     <div className="app">
@@ -20,7 +20,9 @@ export default function AppView({ t, player, navItems, currentPage, onNavigate, 
 
       {fusionFeedbackSlot}
 
-      <RouterView pages={pages} currentPage={currentPage} gameState={gameState} actions={actions} />
+      {contentSlot || (
+        <RouterView pages={pages} currentPage={currentPage} gameState={gameState} actions={actions} />
+      )}
 
       {showChainLogSlot}
     </div>
