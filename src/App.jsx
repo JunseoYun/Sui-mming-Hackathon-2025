@@ -338,6 +338,7 @@ function GameApp() {
       return [];
     }
   };
+  const clearPendingMints = () => { try { localStorage.setItem(PENDING_MINT_KEY, JSON.stringify([])); } catch (_) {} };
   const savePendingMints = (arr) => {
     try {
       localStorage.setItem(PENDING_MINT_KEY, JSON.stringify(arr || []));
@@ -437,6 +438,7 @@ function GameApp() {
   const savePendingBurns = (arr) => {
     try { localStorage.setItem(PENDING_BURN_KEY, JSON.stringify(arr || [])); } catch (_) {}
   };
+  const clearPendingBurns = () => { try { localStorage.setItem(PENDING_BURN_KEY, JSON.stringify([])); } catch (_) {} };
   const enqueuePendingBurns = (ids) => {
     if (!Array.isArray(ids) || ids.length === 0) return;
     const current = loadPendingBurns();
@@ -1829,8 +1831,58 @@ function GameApp() {
       {showChainLog && (
         <ChainLog
           entries={chainLog}
+          mintQueue={loadPendingMints()}
+          burnQueue={loadPendingBurns()}
           onClear={() => { try { localStorage.setItem(CHAIN_LOG_KEY, JSON.stringify([])); } catch (_) {}; setChainLog([]) }}
           onClose={() => setShowChainLog(false)}
+          onFlushMints={() => {
+            // trigger flush by toggling effects: simply call the flush logic inline
+            (async () => {
+              const owner = signing.address ?? currentAccount?.address ?? null;
+              if (!owner) return;
+              const pkg = resolvePackageId();
+              const q = loadPendingMints();
+              const BATCH_SIZE = 5;
+              for (let i = 0; i < q.length; i += BATCH_SIZE) {
+                const batch = q.slice(i, i + BATCH_SIZE);
+                try {
+                  await queueAndRetry('ui.flush.mints.batch', async () => onchainCreateManyBlockMon({ executor, packageId: pkg, sender: owner, entries: batch, client, signAndExecute }), { attempts: 4, baseDelayMs: 600 });
+                  removeEntriesFromQueue([...batch]);
+                } catch (_) {
+                  for (const entry of batch) {
+                    try {
+                      await queueAndRetry('ui.flush.mints.single', async () => onchainCreateBlockMon({ executor, packageId: pkg, sender: owner, ...entry, client, signAndExecute }), { attempts: 6, baseDelayMs: 600 });
+                      removeEntriesFromQueue([entry]);
+                    } catch (_) {}
+                  }
+                }
+              }
+              setShowChainLog(true);
+            })();
+          }}
+          onFlushBurns={() => {
+            (async () => {
+              const owner = signing.address ?? currentAccount?.address ?? null;
+              if (!owner) return;
+              const pkg = resolvePackageId();
+              const all = loadPendingBurns();
+              const BATCH_SIZE = 10;
+              for (let i = 0; i < all.length; i += BATCH_SIZE) {
+                const batch = all.slice(i, i + BATCH_SIZE);
+                try {
+                  await queueAndRetry('ui.flush.burns.batch', async () => onchainBurnMany({ executor, packageId: pkg, blockmonIds: batch, client, signAndExecute }), { attempts: 5, baseDelayMs: 700 });
+                  removeBurnIdsFromQueue(batch);
+                } catch (_) {
+                  for (const id of batch) {
+                    try { await queueAndRetry('ui.flush.burns.single', async () => onchainBurn({ executor, packageId: pkg, blockmonId: id, client, signAndExecute }), { attempts: 6, baseDelayMs: 600 }); removeBurnIdsFromQueue([id]); } catch (_) {}
+                  }
+                }
+              }
+              setShowChainLog(true);
+            })();
+          }}
+          onClearMints={() => { clearPendingMints(); setShowChainLog(true); }}
+          onClearBurns={() => { clearPendingBurns(); setShowChainLog(true); }}
         />
       )}
     </div>

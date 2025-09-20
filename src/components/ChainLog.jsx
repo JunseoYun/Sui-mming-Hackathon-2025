@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react'
 
-export default function ChainLog({ entries = [], onClear, onClose, max = 200 }) {
+export default function ChainLog({ entries = [], onClear, onClose, max = 200, mintQueue = [], burnQueue = [], onFlushMints, onFlushBurns, onClearMints, onClearBurns }) {
   const shown = useMemo(() => {
     const slice = entries.slice(-max)
     return [...slice].reverse()
@@ -13,6 +13,24 @@ export default function ChainLog({ entries = [], onClear, onClose, max = 200 }) 
         <div style={styles.headerActions}>
           <button onClick={onClear} style={styles.button}>Clear</button>
           <button onClick={onClose} style={styles.button}>Close</button>
+        </div>
+      </div>
+      <div style={styles.summary}>
+        <div style={styles.summaryBlock}>
+          <div>Pending Mints: <strong>{mintQueue.length}</strong></div>
+          <div style={styles.smallRow}>{previewMint(mintQueue)}</div>
+          <div style={styles.headerActions}>
+            <button onClick={onFlushMints} style={styles.button}>Flush</button>
+            <button onClick={onClearMints} style={styles.button}>Clear</button>
+          </div>
+        </div>
+        <div style={styles.summaryBlock}>
+          <div>Pending Burns: <strong>{burnQueue.length}</strong></div>
+          <div style={styles.smallRow}>{previewBurn(burnQueue)}</div>
+          <div style={styles.headerActions}>
+            <button onClick={onFlushBurns} style={styles.button}>Flush</button>
+            <button onClick={onClearBurns} style={styles.button}>Clear</button>
+          </div>
         </div>
       </div>
       <div style={styles.body}>
@@ -71,6 +89,18 @@ function rowStyle(e) {
   return { ...styles.row, borderLeft: `4px solid ${border}` }
 }
 
+function previewMint(list) {
+  if (!list?.length) return '—'
+  const take = list.slice(0, 2)
+  return take.map((e) => `${e.monId || e.species || 'mon'}:${e.name || ''}`).join('  |  ') + (list.length > 2 ? '  ...' : '')
+}
+
+function previewBurn(list) {
+  if (!list?.length) return '—'
+  const take = list.slice(0, 2)
+  return take.map((id) => truncate(id, 18)).join('  |  ') + (list.length > 2 ? '  ...' : '')
+}
+
 const styles = {
   wrapper: {
     position: 'fixed',
@@ -95,6 +125,9 @@ const styles = {
     borderBottom: '1px solid #333',
   },
   headerActions: { display: 'flex', gap: 8 },
+  summary: { display: 'flex', gap: 8, padding: '6px 8px', borderBottom: '1px solid #333' },
+  summaryBlock: { flex: 1, display: 'flex', flexDirection: 'column', gap: 4 },
+  smallRow: { fontFamily: 'monospace', opacity: 0.8 },
   button: {
     background: '#222',
     color: '#ddd',
