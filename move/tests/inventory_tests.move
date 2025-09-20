@@ -155,6 +155,9 @@ fun inventory_create_add_and_update() {
     };
     assert_eq!(get_potion_quantity_in_inventory(&inv, HP), 5);
 
+    // consume inventory by transferring to sender to avoid unused value without 'drop'
+    sui::transfer::public_transfer(inv, SENDER2);
+
     test_scenario::end(scenario);
 }
 
@@ -177,6 +180,9 @@ fun inventory_use_potions_success() {
         use_potions_from_inventory(&mut inv, HP, 2, ctx);
     };
     assert_eq!(get_potion_quantity_in_inventory(&inv, HP), 1);
+
+    // consume inventory by transferring to sender to avoid unused value without 'drop'
+    sui::transfer::public_transfer(inv, SENDER2);
 
     test_scenario::end(scenario);
 }

@@ -2,10 +2,6 @@
 module blockmon::blockmon;
 
 use std::string::String;
-use std::vector;
-use sui::transfer;
-use sui::tx_context::{Self, TxContext};
-use sui::object;
 // For Move coding conventions, see
 // https://docs.sui.io/concepts/sui-move-concepts/conventions
 
@@ -155,7 +151,7 @@ public fun burn(mon: BlockMon, ctx: &mut TxContext) {
 
 /// Create many BlockMon in a single entry and immediately transfer each
 /// to the transaction sender to avoid large PTB payloads.
-public entry fun create_many_block_mon(
+public fun create_many_block_mon(
   mon_ids: vector<String>,
   names: vector<String>,
   hps: vector<u64>,
@@ -168,7 +164,7 @@ public entry fun create_many_block_mon(
   skill_names: vector<String>,
   skill_descriptions: vector<String>,
   ctx: &mut TxContext,
-) {
+): vector<BlockMon> {
   let mut mut_mon_ids = mon_ids;
   let mut mut_names = names;
   let mut mut_hps = hps;
@@ -196,6 +192,7 @@ public entry fun create_many_block_mon(
     E_ARG_LENGTH_MISMATCH,
   );
 
+  let mut result: vector<BlockMon> = vector::empty<BlockMon>();
   while (!vector::is_empty(&mut_mon_ids)) {
     // Pop from the end for O(1); order is not guaranteed but stable gas-wise
     let mon_id = vector::pop_back(&mut mut_mon_ids);
@@ -224,6 +221,7 @@ public entry fun create_many_block_mon(
       skill_description,
       ctx,
     );
-    transfer::public_transfer(bm, tx_context::sender(ctx));
+    vector::push_back(&mut result, bm);
   };
+  result
 }
