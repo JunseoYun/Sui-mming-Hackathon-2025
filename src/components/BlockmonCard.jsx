@@ -25,7 +25,7 @@ export default function BlockmonCard({
       {isSelected && order >= 0 && <div className="blockmon-card__order">{order + 1}</div>}
       <div className="blockmon-card__header">
         <span className="blockmon-card__species">{speciesLabel || species}</span>
-        <span className="blockmon-card__dna">DNA #{dna}</span>
+        <span className="blockmon-card__dna">DNA#{dna}</span>
       </div>
       <div className="blockmon-card__title">
         <h3 className="blockmon-card__name">{displayName}</h3>

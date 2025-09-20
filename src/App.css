@@ -366,10 +366,22 @@
 }
 
 .blockmon-card__header {
+  width: 100%;
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   font-size: 0.85rem;
   color: rgba(255, 255, 255, 0.6);
+  /* overflow: hidden; */
+}
+.blockmon-card__dna{
+  /* 1. 텍스트가 길어져도 줄바꿈을 하지 않도록 설정합니다. */
+  white-space: nowrap;
+  
+  /* 2. 자신의 영역을 벗어나는 텍스트를 숨깁니다. */
+  overflow: hidden;
+
+  /* 3. 숨겨진 텍스트를 말줄임표(...)로 표시합니다. */
+  text-overflow: ellipsis;
 }
 
 .blockmon-card__name {
@@ -528,12 +540,20 @@
 }
 
 .fusion-feedback--success .fusion-feedback__panel {
-  background: linear-gradient(160deg, rgba(105, 132, 255, 0.92), rgba(147, 88, 255, 0.9));
+  background: linear-gradient(
+    160deg,
+    rgba(105, 132, 255, 0.92),
+    rgba(147, 88, 255, 0.9)
+  );
   border: 1px solid rgba(168, 144, 255, 0.6);
 }
 
 .fusion-feedback--failure .fusion-feedback__panel {
-  background: linear-gradient(160deg, rgba(82, 26, 52, 0.92), rgba(48, 16, 40, 0.9));
+  background: linear-gradient(
+    160deg,
+    rgba(82, 26, 52, 0.92),
+    rgba(48, 16, 40, 0.9)
+  );
   border: 1px solid rgba(255, 128, 160, 0.45);
   animation: fusion-shake 360ms ease-out;
 }
@@ -658,11 +678,13 @@
   }
   35% {
     opacity: 1;
-    transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-40px) scale(0.9);
+    transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-40px)
+      scale(0.9);
   }
   100% {
     opacity: 0;
-    transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-110px) scale(1);
+    transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-110px)
+      scale(1);
   }
 }
 
