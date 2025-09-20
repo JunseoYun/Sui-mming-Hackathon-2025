@@ -367,14 +367,14 @@ export function buildCreateInventoryTx({ packageId, sender }) {
   return tx;
 }
 
-export function buildAddPotionToInventoryTx({ packageId, inventoryId, potionType, effectValue, quantity, description }) {
+export function buildAddPotionToInventoryTx({ packageId, inventoryId, potionKind, effectValue, quantity, description }) {
   const pkg = resolvePackageId(packageId);
   const tx = new TransactionBlock();
   tx.moveCall({
     target: fn(pkg, "add_potion_to_inventory"),
     arguments: [
       tx.object(inventoryId),
-      tx.pure.string(potionType ?? "HP"),
+      tx.pure.u8(Number.isFinite(Number(potionKind)) ? Math.trunc(Number(potionKind)) : 1),
       tx.pure.u64(effectValue),
       tx.pure.u64(quantity),
       tx.pure.string(description ?? "HP Potion"),
@@ -383,12 +383,12 @@ export function buildAddPotionToInventoryTx({ packageId, inventoryId, potionType
   return tx;
 }
 
-export function buildUsePotionsFromInventoryTx({ packageId, inventoryId, potionType, quantity }) {
+export function buildUsePotionsFromInventoryTx({ packageId, inventoryId, potionKind, quantity }) {
   const pkg = resolvePackageId(packageId);
   const tx = new TransactionBlock();
   tx.moveCall({
     target: fn(pkg, "use_potions_from_inventory"),
-    arguments: [tx.object(inventoryId), tx.pure.string(potionType ?? "HP"), tx.pure.u64(quantity)],
+    arguments: [tx.object(inventoryId), tx.pure.u8(Number.isFinite(Number(potionKind)) ? Math.trunc(Number(potionKind)) : 1), tx.pure.u64(quantity)],
   });
   return tx;
 }
@@ -453,8 +453,68 @@ export async function getTotalBMCoinBalance(client, ownerAddress, packageId) {
   }
 }
 
-// Backward-compatible alias
-export const getTotalBMTokenBalance = getTotalBMCoinBalance;
+// BMToken 기반 총 잔고 합산 (Coin<BM> 미사용 경로)
+export async function getTotalBMTokenBalance(client, ownerAddress, packageId) {
+  if (!ownerAddress) return 0;
+  try {
+    const pkg = resolvePackageId(packageId);
+    let primaryCount = 0;
+    try {
+      const LIMIT = 50;
+      let cursor = null;
+      let total = 0;
+      let pages = 0;
+      do {
+        const res = await client.getOwnedObjects({
+          owner: ownerAddress,
+          filter: { StructType: `${pkg}::inventory::BMToken` },
+          options: { showType: true, showContent: true },
+          limit: LIMIT,
+          cursor,
+        });
+        const rows = res?.data ?? [];
+        primaryCount += rows.length;
+        for (const it of rows) {
+          const fields = it?.data?.content?.fields ?? it?.content?.fields;
+          const amt = fields?.amount;
+          if (amt != null) total += parseInt(amt);
+        }
+        cursor = res?.nextCursor ?? null;
+        pages += 1;
+      } while (cursor && pages < 20);
+      if (total > 0) return total;
+    } catch (e) {
+      // ignore; will fallback
+    }
+    // Fallback: scan all owned objects and match BMToken by suffix (package id mismatch safety)
+    try {
+      const LIMIT = 50;
+      let cursor = null;
+      let sum = 0;
+      let totalCount = 0;
+      let pages = 0;
+      do {
+        const resAll = await client.getOwnedObjects({ owner: ownerAddress, options: { showType: true, showContent: true }, limit: LIMIT, cursor });
+        const rows = resAll?.data ?? [];
+        totalCount += rows.length;
+        for (const it of rows) {
+          const type = it?.data?.type || it?.type || it?.data?.content?.type;
+          if (typeof type === 'string' && type.endsWith('::inventory::BMToken')) {
+            const fields = it?.data?.content?.fields ?? it?.content?.fields;
+            const amt = fields?.amount;
+            if (amt != null) sum += parseInt(amt);
+          }
+        }
+        cursor = resAll?.nextCursor ?? null;
+        pages += 1;
+      } while (cursor && pages < 40);
+      if (sum > 0) return sum;
+    } catch (_) {}
+    return 0;
+  } catch (_) {
+    return 0;
+  }
+}
 
 // Build: mint Coin<BM> to recipient using TreasuryCap<BM>
 export function buildMintBMCoinTx({ packageId, capId, recipient, amount }) {

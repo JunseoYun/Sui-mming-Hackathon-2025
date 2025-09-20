@@ -42,7 +42,13 @@ export function createInventoryService({
     const capId = getEnvBMTreasuryCapId();
     const strategy = detectSigningStrategy();
     if (capId && strategy === 'env-key') {
-      await queueAndRetry('inventory.mintBMCoin', async () => mintBMCoin({ executor, packageId: pkg, capId, recipient: owner, amount: normalized, client }), { attempts: 4, baseDelayMs: 500 });
+      const res = await queueAndRetry('inventory.mintBMCoin', async () => mintBMCoin({ executor, packageId: pkg, capId, recipient: owner, amount: normalized, client }), { attempts: 4, baseDelayMs: 500 });
+      try {
+        const digest = res?.digest || res?.effects?.transactionDigest || res?.effectsDigest;
+        if (digest && typeof client.waitForTransactionBlock === 'function') {
+          await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true } });
+        }
+      } catch (_) {}
     } else {
       let bmTokenId = null;
       try {
@@ -51,12 +57,29 @@ export function createInventoryService({
         bmTokenId = first?.data?.objectId ?? first?.objectId ?? null;
       } catch (_) {}
       if (bmTokenId) {
-        await queueAndRetry('inventory.addBMTokens', async () => onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount: normalized, client }), { attempts: 4, baseDelayMs: 500 });
+        const res = await queueAndRetry('inventory.addBMTokens', async () => onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount: normalized, client }), { attempts: 4, baseDelayMs: 500 });
+        try {
+          const digest = res?.digest || res?.effects?.transactionDigest || res?.effectsDigest;
+          if (digest && typeof client.waitForTransactionBlock === 'function') {
+            await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true } });
+          }
+        } catch (_) {}
       } else {
-        await queueAndRetry('inventory.createBMToken', async () => onchainCreateBMToken({ executor, packageId: pkg, sender: owner, amount: normalized, tokenType: 'BM', client }), { attempts: 4, baseDelayMs: 500 });
+        const res = await queueAndRetry('inventory.createBMToken', async () => onchainCreateBMToken({ executor, packageId: pkg, sender: owner, amount: normalized, tokenType: 'BM', client }), { attempts: 4, baseDelayMs: 500 });
+        try {
+          const digest = res?.digest || res?.effects?.transactionDigest || res?.effectsDigest;
+          if (digest && typeof client.waitForTransactionBlock === 'function') {
+            await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true } });
+          }
+        } catch (_) {}
       }
     }
-    const total = await getTotalBMCoinBalance(client, owner, pkg);
+    // refresh with polling
+    let total = await getTotalBMCoinBalance(client, owner, pkg);
+    for (let i = 0; i < 5 && (!Number.isFinite(total) || total <= 0); i++) {
+      await new Promise((r) => setTimeout(r, 300));
+      total = await getTotalBMCoinBalance(client, owner, pkg);
+    }
     if (Number.isFinite(total)) setTokens(total);
   };
 
@@ -125,7 +148,7 @@ export function createInventoryService({
 
         // Add potions to Inventory bag (HP kind=1, effect=9999 until balancing)
         const inv = await loadInventoryModule();
-        const tx = inv.buildAddPotionToInventoryTx({ packageId: pkg, inventoryId, potionType: 'HP', effectValue: 9999, quantity: amountNormalized, description: 'HP Potion' });
+        const tx = inv.buildAddPotionToInventoryTx({ packageId: pkg, inventoryId, potionKind: 1, effectValue: 9999, quantity: amountNormalized, description: 'HP Potion' });
         const res = await queueAndRetry('inventory.addPotionToInventory', async () => executor(tx), { attempts: 4, baseDelayMs: 500 });
         try {
           const digest = res?.digest || res?.effects?.transactionDigest || res?.effectsDigest;

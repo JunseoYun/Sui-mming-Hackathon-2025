@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import BlockmonCard from "../components/BlockmonCard";
 import TokenBalance from "../components/TokenBalance";
 import { translateSpecies } from "../i18n";
@@ -14,7 +14,17 @@ export default function Home({ gameState, actions }) {
     adventureSelection,
     language,
     t,
+    signing,
   } = gameState;
+
+  // Log owner address when Home is shown or address changes
+  useEffect(() => {
+    try {
+      const addr = signing?.address || null;
+      if (addr) console.log("[UI] Home owner address:", addr);
+      else console.log("[UI] Home owner address: (not connected)");
+    } catch (_) {}
+  }, [signing?.address]);
 
   const [error, setError] = useState("");
   const [showPotionChooser, setShowPotionChooser] = useState(false);

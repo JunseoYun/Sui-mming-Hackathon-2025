@@ -427,9 +427,34 @@ function GameApp() {
         const pkg = resolvePackageId();
         // BM 코인 총합 동기화
         try {
-          const bmTotal = await getTotalBMTokenBalance(client, owner, pkg);
-          if (!cancelled && Number.isFinite(bmTotal)) {
-            setTokens(bmTotal);
+          let bmTotal = await getTotalBMTokenBalance(client, owner, pkg);
+          if (!cancelled && Number.isFinite(bmTotal)) setTokens(bmTotal);
+          // 최초 자동 생성: BMToken이 없고 총합 0이면 기본 10 BM 생성
+          if (!cancelled && Number.isFinite(bmTotal) && bmTotal <= 0) {
+            try {
+              const resBM = await listOwnedBMTokens(client, owner, pkg, null, 50);
+              const hasBMToken = (resBM?.data ?? []).length > 0;
+              if (!hasBMToken) {
+                logTxStart('autoInit.createBMToken', { amount: 10 });
+                const res = await queueAndRetry('autoInit.createBMToken', async () => onchainCreateBMToken({ executor, packageId: pkg, sender: owner, amount: 10, tokenType: 'BM', client, signAndExecute }), { attempts: 4, baseDelayMs: 500 });
+                try {
+                  const digest = res?.digest || res?.effects?.transactionDigest || res?.effectsDigest;
+                  if (digest && typeof client.waitForTransactionBlock === 'function') {
+                    await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true } });
+                  }
+                } catch (_) {}
+                // refresh with short polling for eventual consistency
+                for (let i = 0; i < 5; i++) {
+                  bmTotal = await getTotalBMTokenBalance(client, owner, pkg);
+                  if (Number.isFinite(bmTotal) && bmTotal > 0) break;
+                  await new Promise((r) => setTimeout(r, 300));
+                }
+                if (!cancelled && Number.isFinite(bmTotal)) setTokens(bmTotal);
+                logTxSuccess('autoInit.createBMToken', res, { amount: 10 });
+              }
+            } catch (e) {
+              logTxError('autoInit.createBMToken', e);
+            }
           }
         } catch (e) {
           console.error("[Onchain] load BM balance failed", e);
@@ -441,6 +466,36 @@ function GameApp() {
           total = await getTotalPotionCountByType(client, owner, pkg, "HP");
         }
         if (!cancelled && Number.isFinite(total)) setPotions(total);
+        // 최초 자동 생성: HP 포션이 없으면 1개 생성
+        if (!cancelled && Number.isFinite(total) && total <= 0) {
+          try {
+            const resP = await listOwnedPotions(client, owner, pkg, null, 50);
+            const hpEntry = (resP?.data ?? []).find((item) => {
+              const fields = item?.data?.content?.fields ?? item?.content?.fields;
+              return fields?.potion_type === 'HP';
+            });
+            if (!hpEntry) {
+              logTxStart('autoInit.createPotion', { quantity: 1 });
+              const res = await queueAndRetry('autoInit.createPotion', async () => onchainCreatePotion({ executor, packageId: pkg, sender: owner, potionType: 'HP', effectValue: 9999, quantity: 2, description: 'HP Potion', client, signAndExecute }), { attempts: 4, baseDelayMs: 500 });
+              try {
+                const digest = res?.digest || res?.effects?.transactionDigest || res?.effectsDigest;
+                if (digest && typeof client.waitForTransactionBlock === 'function') {
+                  await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true } });
+                }
+              } catch (_) {}
+              // refresh
+              let t2 = await getTotalPotionCountByType(client, owner, pkg, 'HP');
+              for (let i = 0; i < 3 && (!Number.isFinite(t2) || t2 <= 0); i++) {
+                await new Promise((r) => setTimeout(r, 300));
+                t2 = await getTotalPotionCountByType(client, owner, pkg, 'HP');
+              }
+              if (!cancelled && Number.isFinite(t2)) setPotions(t2);
+              logTxSuccess('autoInit.createPotion', res, { quantity: 1 });
+            }
+          } catch (e) {
+            logTxError('autoInit.createPotion', e);
+          }
+        }
       } catch (e) {
         console.error("[Onchain] load potions failed", e);
       }

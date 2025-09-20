@@ -144,8 +144,15 @@ public fun create_inventory(ctx: &mut TxContext): Inventory {
     inv
 }
 
+/// Entry wrapper: create Inventory and transfer to sender
+entry fun create_inventory_and_transfer(ctx: &mut TxContext) {
+    let owner = tx_context::sender(ctx);
+    let inv = create_inventory(ctx);
+    transfer::public_transfer(inv, owner);
+}
+
 /// Add or increase a potion entry in the inventory bag
-public fun add_potion_to_inventory(
+entry fun add_potion_to_inventory(
     inv: &mut Inventory,
     potion_kind: u8,
     effect_value: u64,
@@ -187,7 +194,7 @@ public fun add_potion_to_inventory(
 
 /// Use potion(s) from inventory; aborts if insufficient
 const E_INSUFFICIENT_POTION_IN_BAG: u64 = 10;
-public fun use_potions_from_inventory(
+entry fun use_potions_from_inventory(
     inv: &mut Inventory,
     potion_kind: u8,
     quantity_to_use: u64,
@@ -264,12 +271,11 @@ public fun create_bm_token(
         amount,
         token_type,
     });
-    
     bm_token
 }
 
 /// BM 토큰 수량 증가
-public fun add_bm_tokens(
+entry fun add_bm_tokens(
     bm_token: &mut BMToken,
     amount_to_add: u64,
     ctx: &mut TxContext,
@@ -289,7 +295,7 @@ public fun add_bm_tokens(
 }
 
 /// BM 토큰 수량 감소
-public fun subtract_bm_tokens(
+entry fun subtract_bm_tokens(
     bm_token: &mut BMToken,
     amount_to_subtract: u64,
     ctx: &mut TxContext,
@@ -325,16 +331,16 @@ public fun get_bm_token_type(bm_token: &BMToken): &String {
 }
 
 /// BM 토큰 업데이트 함수들
-public fun set_bm_token_amount(bm_token: &mut BMToken, new_amount: u64) {
+entry fun set_bm_token_amount(bm_token: &mut BMToken, new_amount: u64) {
     bm_token.amount = new_amount;
 }
 
-public fun set_bm_token_type(bm_token: &mut BMToken, new_type: String) {
+entry fun set_bm_token_type(bm_token: &mut BMToken, new_type: String) {
     bm_token.token_type = new_type;
 }
 
 /// BM 토큰 삭제 (소각)
-public fun burn_bm_token(bm_token: BMToken, ctx: &mut TxContext) {
+entry fun burn_bm_token(bm_token: BMToken, ctx: &mut TxContext) {
     let owner = tx_context::sender(ctx);
     let token_id = object::uid_to_address(&bm_token.id);
     let amount = bm_token.amount;
@@ -377,12 +383,24 @@ public fun create_potion(
         effect_value,
         quantity,
     });
-    
     potion
 }
 
+/// Entry wrapper: mint Potion and transfer to sender
+entry fun mint_potion(
+    potion_type: String,
+    effect_value: u64,
+    quantity: u64,
+    description: String,
+    ctx: &mut TxContext,
+) {
+    let owner = tx_context::sender(ctx);
+    let p = create_potion(potion_type, effect_value, quantity, description, ctx);
+    transfer::public_transfer(p, owner);
+}
+
 /// 포션 수량 증가
-public fun add_potions(
+entry fun add_potions(
     potion: &mut Potion,
     quantity_to_add: u64,
     ctx: &mut TxContext,
@@ -402,7 +420,7 @@ public fun add_potions(
 }
 
 /// 포션 사용 (수량 감소) - HP 복원 포션 사용
-public fun use_potion(
+entry fun use_potion(
     potion: &mut Potion,
     quantity_to_use: u64,
     ctx: &mut TxContext,
