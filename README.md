@@ -1,12 +1,39 @@
-# Blockmon (React + Vite)
+# **Blockmon: A Proposal for Next-Generation On-Chain Social Gaming**
+
+**1. The Problem**
+
+Web3 gaming promised “true ownership of digital assets,” but it has failed to reach the mainstream due to **complicated onboarding** and  **punitive UX** .
+
+Meanwhile, Web2 gaming attracts billions of users, yet players face **opaque probabilities** and **limited ownership** over the assets they invest time and money into.
+
+👉 The core issue: Web3 is too  **inconvenient** , and Web2 is not **fair** or **free** enough.
+
+**2. Our Solution**
+
+**Blockmon** leverages the **Sui blockchain object model** and **Enoki onboarding** to deliver a gaming experience that combines the **simplicity of Web2** with the  **transparency of Web3** .
+
+**(1) Frictionless Onboarding & Free-to-Play**
+
+* **Enoki Login** : Users sign in with familiar accounts (e.g., Google). A secure, non-custodial wallet is automatically created in the background.
+* **Sponsored Transactions** : The platform covers all gas fees, allowing players to enjoy the game without ever dealing with blockchain concepts.
+
+**(2) Minimal On-Chain Structure**
+
+    **On-chain modules** :
+
+* blockmon.move: Defines core Blockmon logic
+* inventory.move: Manages player-owned assets
+* Game assets are stored as on-chain objects, ensuring players directly
 
 ## 개발 환경 구성 (로컬 Sui + dev 서명)
 
 ### 요구 사항
+
 - Node.js 18+
 - Sui CLI (또는 Docker 로컬넷 이미지)
 
 ### 1) 로컬 Sui 노드 실행
+
 ```bash
 # 방법 A: Sui CLI
 sui start
@@ -16,6 +43,7 @@ docker run --rm -p 9000:9000 -p 9123:9123 ghcr.io/mystenlabs/sui-localnet:latest
 ```
 
 ### 2) Move 패키지 배포 (localnet)
+
 ```bash
 cd move
 
@@ -33,7 +61,9 @@ sui move publish --gas-budget 100000000 --skip-dependency-verification
 ```
 
 ### 3) 개발용 환경 변수 설정
+
 프로젝트 루트의 `.env.development.local`을 사용합니다(빌드 제외, git에 커밋 금지):
+
 ```bash
 VITE_SUI_NETWORK=local
 VITE_SUI_RPC_URL=http://127.0.0.1:9000
@@ -52,10 +82,12 @@ VITE_BLOCKMON_PACKAGE_ID=0x<배포된 패키지 ID>
 ```
 
 참고:
+
 - dev 모드(`npm run dev`)에서 니모닉/프라이빗 키가 있으면 env-key로 서명, 아니면 지갑 서명으로 폴백합니다.
 - 실제 비밀값은 `.env.development.local`에만 넣고, prod 관련 파일에는 절대 넣지 마세요.
 
 ### 4) 앱 실행
+
 ```bash
 npm install
 npm run dev
@@ -66,9 +98,10 @@ npm run dev
 ---
 
 ## Known Risks & Mitigations
-- 자세한 내용은 다음 문서 섹션을 참고하세요: [Implementation Review and Roadmap - Known Risks & Mitigations](docs/ImplementationReviewAndRoadmap.md#known-risks--mitigations)
+
+- 자세한 내용은 다음 문서 섹션을 참고하세요: [Implementation Review and Roadmap - Known Risks &amp; Mitigations](docs/ImplementationReviewAndRoadmap.md#known-risks--mitigations)
 
 ## Vite 템플릿 참고
+
 - HMR, ESLint 설정 포함
 - 플러그인: [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react)
-
