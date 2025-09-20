@@ -1,9 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
-import Adventure from "./pages/Adventure";
-import Fusion from "./pages/Fusion";
 import Home from "./pages/Home";
-import Inventory from "./pages/Inventory";
-import Pvp from "./pages/Pvp";
 import Signup from "./pages/Signup";
 import {
   createBlockmonFromSeed,
@@ -13,12 +9,7 @@ import {
   formatSeed,
   evaluateFusionRecipe,
 } from "./utils/random";
-import {
-  translate,
-  translateSpecies,
-  translateAction,
-  translateDetail,
-} from "./i18n";
+import { translate, translateSpecies } from "./i18n";
 import "./App.css";
 import "./index.css";
 import {
@@ -34,6 +25,7 @@ import { isEnokiNetwork, registerEnokiWallets } from "@mysten/enoki";
 import FusionFeedback from "./components/FusionFeedback";
 import ChainLog from "./components/ChainLog";
 import AppView from "./components/AppView";
+import RegisterEnokiWallets from "./components/RegisterEnokiWallets";
 import { getFullnodeUrl } from "@mysten/sui.js/client";
 import { TransactionBlock } from "@mysten/sui.js/transactions";
 import {
@@ -55,6 +47,9 @@ import {
   resolvePackageId,
 } from "./utils/blockmon";
 import { catalog as speciesCatalog } from "./utils/random";
+import { assembleBattleLog, formatLogTime } from "./utils/battleLog";
+import { mapOnchainToLocal } from "./utils/mappers";
+import { pages } from "./routes/pages";
 import {
   listOwnedPotions,
   createPotion as onchainCreatePotion,
@@ -82,30 +77,9 @@ import {
 } from "./services/chain";
 import { useTea, TeaMsg, initialModel } from "./state/tea";
 
-const pages = {
-  home: { labelKey: "nav.home", component: Home, showInNav: true },
-  adventure: {
-    labelKey: "nav.adventure",
-    component: Adventure,
-    showInNav: true,
-  },
-  fusion: { labelKey: "nav.fusion", component: Fusion, showInNav: true },
-  pvp: { labelKey: "nav.pvp", component: Pvp, showInNav: true },
-  inventory: {
-    labelKey: "nav.inventory",
-    component: Inventory,
-    showInNav: true,
-  },
-};
+// pages moved to routes/pages
 
-function formatLogTime(language, offsetMinutes = 0) {
-  const base = new Date(Date.now() + offsetMinutes * 60_000);
-  const locale = language === "en" ? "en-US" : "ko-KR";
-  return base.toLocaleTimeString(locale, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+// formatLogTime moved to utils/battleLog
 
 const { networkConfig } = createNetworkConfig({
   local: { url: import.meta.env.VITE_SUI_RPC_URL || "http://127.0.0.1:9000" },
@@ -129,91 +103,7 @@ function App() {
   );
 }
 
-function assembleBattleLog(
-  rounds,
-  outcome,
-  startOffset = 0,
-  language,
-  playerActor,
-  opponentActor,
-  playerDisplayName
-) {
-  const getSpeciesLabel = (species) =>
-    translateSpecies(species, language) || species;
-
-  const localizeName = (name, fallbackSpecies) => {
-    if (!name) return getSpeciesLabel(fallbackSpecies);
-    if (name === fallbackSpecies) return getSpeciesLabel(fallbackSpecies);
-
-    const [candidateSpecies, suffix] = name.split('-', 2);
-    const translatedSpecies =
-      translateSpecies(candidateSpecies, language) || getSpeciesLabel(fallbackSpecies);
-
-    if (suffix !== undefined) {
-      return suffix.length > 0 ? `${translatedSpecies}-${suffix}` : translatedSpecies;
-    }
-
-    const directTranslation = translateSpecies(name, language);
-    if (directTranslation && directTranslation !== name) {
-      return directTranslation;
-    }
-
-    return name;
-  };
-
-  const playerDisplay = localizeName(playerDisplayName, playerActor);
-  const playerSpeciesDisplay = getSpeciesLabel(playerActor);
-  const opponentSpeciesDisplay = getSpeciesLabel(opponentActor);
-
-  const entries = rounds.map((round, index) => {
-    if (round.actor === 'potion') {
-      return {
-        time: formatLogTime(language, startOffset + index),
-        actorType: 'potion',
-        message: translate(language, 'battleLog.entry.potion', {
-          name: playerDisplay,
-          hp: Math.round(round.playerHp ?? round.hpAfterPotion ?? 0),
-        }),
-      };
-    }
-
-    const actorType = round.actor === 'player' ? 'player' : 'opponent';
-    const actorSpecies = round.actorSpecies ?? (actorType === 'player' ? playerActor : opponentActor);
-    const actorDisplay = translateSpecies(actorSpecies, language) || actorSpecies;
-    const targetDisplay =
-      actorType === 'player' ? opponentSpeciesDisplay : playerSpeciesDisplay;
-    const hpValue = actorType === 'player'
-      ? Math.round(round.opponentHp ?? 0)
-      : Math.round(round.playerHp ?? 0);
-
-    const action = translateAction(round.action, language);
-    const detail = translateDetail(round.detail, language);
-    const message = translate(
-      language,
-      actorType === 'player' ? 'battleLog.entry.player' : 'battleLog.entry.opponent',
-      {
-        name: actorDisplay,
-        action,
-        detail,
-        target: targetDisplay,
-        hp: hpValue,
-      }
-    );
-    return {
-      time: formatLogTime(language, startOffset + index),
-      actorType,
-      message,
-    };
-  });
-
-  const summaryKey =
-    outcome === "win" ? "battleLog.summary.win" : "battleLog.summary.defeat";
-  entries.push({
-    time: formatLogTime(language, startOffset + rounds.length + 1),
-    message: translate(language, summaryKey),
-  });
-  return entries;
-}
+// assembleBattleLog moved to utils/battleLog
 
 function GameApp() {
   const [player, setPlayer] = useState(null);
@@ -431,51 +321,7 @@ function GameApp() {
     return () => { cancelled = true; };
   }, [client, signing.address, currentAccount?.address, executor]);
 
-  // 체인 BlockMon -> 로컬 모델 매핑
-  const mapOnchainToLocal = (entry) => {
-    try {
-      const objectId = entry?.data?.objectId ?? entry?.objectId ?? null;
-      const content = entry?.data?.content ?? entry?.content ?? null;
-      const fields = content?.fields ?? null;
-      if (!objectId || !fields) return null;
-      const base = fields.base?.fields ?? {};
-      const skill = fields.skill?.fields ?? {};
-      const monId = fields.monId ?? fields.mon_id ?? fields.monID ?? fields.monid ?? "";
-      const speciesEntry = speciesCatalog.find((s) => s.id === monId);
-      const speciesName = speciesEntry?.name ?? monId ?? "";
-      const stats = {
-        str: Number(base.str ?? 0),
-        dex: Number(base.dex ?? 0),
-        con: Number(base.con ?? 0),
-        int: Number(base.int ?? 0),
-        wis: Number(base.wis ?? 0),
-        cha: Number(base.cha ?? 0),
-      };
-      const hp = Number(base.hp ?? 0);
-      const power = hp + Object.values(stats).reduce((a, b) => a + Number(b || 0), 0);
-      return {
-        id: objectId,
-        onchain: true,
-        speciesId: monId,
-        species: speciesName,
-        name: fields.name ?? speciesName,
-        dna: objectId,
-        hp,
-        maxHp: hp,
-        stats,
-        skill: {
-          name: String(skill.name ?? ""),
-          description: String(skill.description ?? ""),
-        },
-        rank: undefined,
-        origin: "온체인",
-        power,
-      };
-    } catch (e) {
-      console.warn("[Onchain->Local] map failed", e, entry);
-      return null;
-    }
-  };
+  // mapOnchainToLocal moved to utils/mappers
 
   // 주소가 준비되면 온체인 보유 BlockMon을 로드
   useEffect(() => {
@@ -1809,40 +1655,6 @@ function GameApp() {
   );
 }
 
-function RegisterEnokiWallets() {
-  const { client, network } = useSuiClientContext();
-
-  useEffect(() => {
-    if (!isEnokiNetwork(network)) {
-      console.log("[Enoki] 지원되지 않는 네트워크, 등록 건너뜀", network);
-      return;
-    }
-
-    const redirectUrl = `${window.location.origin}${window.location.pathname}`;
-
-    console.log("[Enoki] 지갑 등록 시작", { network, redirectUrl });
-
-    const registration = registerEnokiWallets({
-      apiKey: import.meta.env.VITE_ENOKI_API_KEY,
-      providers: {
-        google: {
-          clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-          redirectUrl,
-        },
-      },
-      client,
-      network,
-    });
-
-    console.log("[Enoki] 지갑 등록 성공", {
-      network,
-      wallets: Object.keys(registration.wallets ?? {}),
-    });
-
-    return registration.unregister;
-  }, [client, network]);
-
-  return null;
-}
+// RegisterEnokiWallets moved to components/RegisterEnokiWallets
 
 export default App;
