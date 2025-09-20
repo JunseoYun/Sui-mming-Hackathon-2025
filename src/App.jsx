@@ -31,10 +31,7 @@ import {
 } from "@mysten/dapp-kit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { isEnokiNetwork, registerEnokiWallets } from "@mysten/enoki";
-import { getFullnodeUrl } from "@mysten/sui/client";
 import FusionFeedback from "./components/FusionFeedback";
-||||||| parent of 4dac644 (fix(signer,blockmon,app): support env-key across SDK variants and fix typos)
-import { getFullnodeUrl } from "@mysten/sui/client";
 import { getFullnodeUrl } from "@mysten/sui.js/client";
 import {
   detectSigningStrategy,
