@@ -1,6 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
 import Adventure from "./pages/Adventure";
-import Battle from "./pages/Battle";
 import Fusion from "./pages/Fusion";
 import Home from "./pages/Home";
 import Inventory from "./pages/Inventory";
@@ -16,12 +15,8 @@ import {
 import {
   translate,
   translateSpecies,
-  translateTemperament,
-  translateOrigin,
   translateAction,
   translateDetail,
-  translateStatus,
-  translateNote,
 } from "./i18n";
 import "./App.css";
 import "./index.css";
@@ -42,7 +37,6 @@ const pages = {
     component: Adventure,
     showInNav: true,
   },
-  battle: { labelKey: "nav.battle", component: Battle, showInNav: false },
   fusion: { labelKey: "nav.fusion", component: Fusion, showInNav: true },
   pvp: { labelKey: "nav.pvp", component: Pvp, showInNav: true },
   inventory: {
@@ -88,32 +82,72 @@ function assembleBattleLog(
   language,
   playerActor,
   opponentActor,
-  playerDisplayName,
-  opponentDisplayName
+  playerDisplayName
 ) {
-  const playerDisplay =
-    translateSpecies(playerDisplayName, language) || playerDisplayName;
-  const opponentDisplay =
-    translateSpecies(opponentDisplayName, language) || opponentDisplayName;
+  const getSpeciesLabel = (species) =>
+    translateSpecies(species, language) || species;
+
+  const localizeName = (name, fallbackSpecies) => {
+    if (!name) return getSpeciesLabel(fallbackSpecies);
+    if (name === fallbackSpecies) return getSpeciesLabel(fallbackSpecies);
+
+    const [candidateSpecies, suffix] = name.split('-', 2);
+    const translatedSpecies =
+      translateSpecies(candidateSpecies, language) || getSpeciesLabel(fallbackSpecies);
+
+    if (suffix !== undefined) {
+      return suffix.length > 0 ? `${translatedSpecies}-${suffix}` : translatedSpecies;
+    }
+
+    const directTranslation = translateSpecies(name, language);
+    if (directTranslation && directTranslation !== name) {
+      return directTranslation;
+    }
+
+    return name;
+  };
+
+  const playerDisplay = localizeName(playerDisplayName, playerActor);
+  const playerSpeciesDisplay = getSpeciesLabel(playerActor);
+  const opponentSpeciesDisplay = getSpeciesLabel(opponentActor);
 
   const entries = rounds.map((round, index) => {
-    const isPlayer = round.actor === playerActor;
+    if (round.actor === 'potion') {
+      return {
+        time: formatLogTime(language, startOffset + index),
+        actorType: 'potion',
+        message: translate(language, 'battleLog.entry.potion', {
+          name: playerDisplay,
+          hp: Math.round(round.playerHp ?? round.hpAfterPotion ?? 0),
+        }),
+      };
+    }
+
+    const actorType = round.actor === 'player' ? 'player' : 'opponent';
+    const actorSpecies = round.actorSpecies ?? (actorType === 'player' ? playerActor : opponentActor);
+    const actorDisplay = translateSpecies(actorSpecies, language) || actorSpecies;
+    const targetDisplay =
+      actorType === 'player' ? opponentSpeciesDisplay : playerSpeciesDisplay;
+    const hpValue = actorType === 'player'
+      ? Math.round(round.opponentHp ?? 0)
+      : Math.round(round.playerHp ?? 0);
+
     const action = translateAction(round.action, language);
     const detail = translateDetail(round.detail, language);
     const message = translate(
       language,
-      isPlayer ? "battleLog.entry.player" : "battleLog.entry.opponent",
+      actorType === 'player' ? 'battleLog.entry.player' : 'battleLog.entry.opponent',
       {
-        name: isPlayer ? playerDisplay : opponentDisplay,
+        name: actorDisplay,
         action,
         detail,
-        target: isPlayer ? opponentDisplay : playerDisplay,
-        hp: round.opponentHp,
+        target: targetDisplay,
+        hp: hpValue,
       }
     );
     return {
       time: formatLogTime(language, startOffset + index),
-      actorType: isPlayer ? "player" : "opponent",
+      actorType,
       message,
     };
   });
@@ -199,13 +233,13 @@ function GameApp() {
     }
   };
 
-  const startAdventure = (selectedIdsParam) => {
-    if (!blockmons.length) return { error: t("errors.noBlockmon") };
-    if (tokens < 1) return { error: t("errors.noTokensAdventure") };
+  const startAdventure = (selectedIdsParam, potionsSelected = 0) => {
+    if (!blockmons.length) return { error: t('errors.noBlockmon') };
+    if (tokens < 1) return { error: t('errors.noTokensAdventure') };
 
     const selectedIds = (selectedIdsParam ?? adventureSelection).slice(0, 4);
     if (!selectedIds.length) {
-      return { error: t("errors.selectTeam") };
+      return { error: t('errors.selectTeam') };
     }
 
     const team = selectedIds
@@ -214,25 +248,21 @@ function GameApp() {
       .slice(0, 4);
 
     if (!team.length) {
-      return { error: t("errors.missingSelected") };
+      return { error: t('errors.missingSelected') };
     }
 
     if (selectedIds.length !== team.length) {
       setAdventureSelection(team.map((mon) => mon.id));
     }
-    let potionsToCarry = 0;
-    if (potions > 0) {
-      const input = window.prompt(
-        `${t("inventory.potions")}\n${t("inventory.potionStock", {
-          value: potions,
-        })}`,
-        Math.min(potions, 2).toString()
-      );
-      const desired = parseInt(input ?? "0", 10);
-      if (!Number.isNaN(desired) && desired > 0) {
-        potionsToCarry = Math.min(desired, potions);
-      }
-    }
+
+    const maxPotionsCarry = Math.min(potions, team.length);
+    const potionsToCarry = Math.max(
+      0,
+      Math.min(
+        maxPotionsCarry,
+        Number.isFinite(potionsSelected) ? Math.trunc(potionsSelected) : 0,
+      ),
+    );
 
     const seed = generateSeed();
     const seedHex = formatSeed(seed);
@@ -246,12 +276,13 @@ function GameApp() {
       remainingHp: mon.hp,
       maxHp: mon.maxHp ?? mon.hp,
       knockedOut: false,
+      potionUsed: false,
     }));
 
     let logs = [
       {
         time: formatLogTime(language),
-        message: t("adventure.log.start", { count: team.length }),
+        message: t('adventure.log.start', { count: team.length }),
       },
     ];
     const battleRecords = [];
@@ -262,130 +293,172 @@ function GameApp() {
     let potionsRemaining = potionsToCarry;
     let potionsUsed = 0;
 
-    appendSeed(seedHex, "Adventure Start");
+    appendSeed(seedHex, 'Adventure Start');
 
     if (potionsToCarry > 0) {
       setPotions((prev) => prev - potionsToCarry);
     }
 
-    while (teamRecords.some((member) => !member.knockedOut)) {
-      const activeMember = teamRecords.find((member) => !member.knockedOut);
-      if (!activeMember) break;
+    outer: while (teamRecords.some((member) => !member.knockedOut)) {
+      const encounterSeed = generateSeed();
+      const wildBase = createBlockmonFromSeed(encounterSeed, { origin: '야생 조우' });
+      let wildHp = wildBase.hp;
+      let encounterEntry = null;
 
-      const baseMon =
-        blockmons.find((mon) => mon.id === activeMember.id) ??
-        team.find((mon) => mon.id === activeMember.id);
-      if (!baseMon) {
-        activeMember.knockedOut = true;
-        continue;
-      }
-      const playerMon = { ...baseMon, hp: activeMember.remainingHp };
-      const battleSeed = generateSeed();
-      const battleSeedHex = formatSeed(battleSeed);
-      const wild = createBlockmonFromSeed(battleSeed, { origin: "야생 조우" });
-      const result = rollBattleOutcome(playerMon, wild, battleSeed, t);
+      while (wildHp > 0 && teamRecords.some((member) => !member.knockedOut)) {
+        const activeMember = teamRecords.find((member) => !member.knockedOut);
+        if (!activeMember) {
+          break;
+        }
 
-      const encounterEntry = {
-        time: formatLogTime(language, offset++),
-        message: t("adventure.log.encounter", {
-          species: translateSpecies(wild.species, language),
-        }),
-      };
+        const baseMon =
+          blockmons.find((mon) => mon.id === activeMember.id) ??
+          team.find((mon) => mon.id === activeMember.id);
+        if (!baseMon) {
+          activeMember.knockedOut = true;
+          continue;
+        }
 
-      const battleLogEntries = assembleBattleLog(
-        result.rounds,
-        result.outcome,
-        offset,
-        language,
-        playerMon.species,
-        wild.species,
-        playerMon.name ?? playerMon.species,
-        wild.name ?? wild.species
-      );
-      const logCount = battleLogEntries.length;
-      offset += logCount + 1;
-
-      let battleEntryLog = [encounterEntry, ...battleLogEntries];
-      logs = [...logs, ...battleEntryLog];
-
-      const reward = 0;
-      defeats += result.outcome === "win" ? 0 : 1;
-      activeMember.remainingHp = result.remainingHp;
-      activeMember.knockedOut = result.outcome !== "win";
-      const memberMaxHp = activeMember.maxHp ?? playerMon.maxHp ?? playerMon.hp;
-
-      if (
-        result.outcome === "win" &&
-        !activeMember.knockedOut &&
-        potionsRemaining > 0 &&
-        activeMember.remainingHp < memberMaxHp * 0.5
-      ) {
-        potionsRemaining -= 1;
-        potionsUsed += 1;
-        activeMember.remainingHp = memberMaxHp;
-        const potionEntry = {
-          time: formatLogTime(language, offset++),
-          message: t("adventure.log.potion", {
-            name:
-              language === "en"
-                ? translateSpecies(activeMember.species, language)
-                : activeMember.name,
-          }),
-          actorType: "player",
+        const playerMon = { ...baseMon, hp: activeMember.remainingHp };
+        const wild = {
+          ...wildBase,
+          hp: wildHp,
+          maxHp: wildBase.maxHp ?? wildBase.hp,
         };
-        logs.push(potionEntry);
-        battleEntryLog = [...battleEntryLog, potionEntry];
-      }
 
-      if (result.outcome === "win") {
-        const captured = {
+        if (!encounterEntry) {
+          encounterEntry = {
+            time: formatLogTime(language, offset++),
+            message: t('adventure.log.encounter', {
+              species: translateSpecies(wildBase.species, language),
+            }),
+          };
+          logs.push(encounterEntry);
+        }
+
+        const battleSeed = generateSeed();
+        const battleSeedHex = formatSeed(battleSeed);
+        const result = rollBattleOutcome(playerMon, wild, battleSeed, {
+          potionsAvailable:
+            !activeMember.potionUsed && potionsRemaining > 0 ? 1 : 0,
+          playerMaxHp: activeMember.maxHp ?? playerMon.maxHp ?? playerMon.hp,
+          t: (key, params) => translate(language, key, params),
+          language,
+        });
+
+        const battleLogEntries = assembleBattleLog(
+          result.rounds,
+          result.outcome,
+          offset,
+          language,
+          playerMon.species,
+          wild.species,
+          playerMon.name ?? playerMon.species
+        );
+        const logCount = battleLogEntries.length;
+        offset += logCount + 1;
+
+        logs = [...logs, ...battleLogEntries];
+
+        defeats += result.outcome === 'win' ? 0 : 1;
+        activeMember.remainingHp = result.remainingHp;
+
+        const potionsConsumed = Math.min(result.potionsUsed ?? 0, potionsRemaining);
+        if (potionsConsumed > 0) {
+          potionsRemaining -= potionsConsumed;
+          potionsUsed += potionsConsumed;
+          activeMember.potionUsed = true;
+        }
+
+        activeMember.knockedOut = activeMember.remainingHp <= 0;
+
+        if (activeMember.knockedOut) {
+          const finalRound = result.rounds[result.rounds.length - 1];
+          const attackerName =
+            translateSpecies(finalRound?.actorSpecies, language) ??
+            finalRound?.actorSpecies ??
+            t('battleLog.actor.opponent');
+          const defenderName =
+            language === 'en'
+              ? translateSpecies(activeMember.species, language)
+              : activeMember.name;
+          logs.push({
+            time: formatLogTime(language, offset++),
+            message: t('adventure.log.knockout', {
+              defender: defenderName,
+              attacker: attackerName,
+            }),
+          });
+        }
+
+        wildHp = result.opponentRemainingHp;
+
+        appendSeed(battleSeedHex, `Wild Battle #${battleRecords.length + 1}`);
+
+        const completedAt = new Date().toISOString();
+        const playerSnapshot = {
+          ...playerMon,
+          hp: result.remainingHp,
+          maxHp: playerMon.maxHp ?? playerMon.hp,
+        };
+        const wildSnapshot = {
           ...wild,
-          id: wild.id,
-          stats: { ...wild.stats },
-          origin: "포획된 야생 블록몬",
+          hp: result.opponentRemainingHp,
+          maxHp: wild.maxHp ?? wild.hp,
         };
-        capturedMonsters.push(captured);
-        const captureMessage = {
-          time: formatLogTime(language, offset++),
-          message: t("adventure.log.capture", {
-            species: translateSpecies(wild.species, language),
-          }),
-        };
-        logs.push(captureMessage);
-        battleEntryLog = [...battleEntryLog, captureMessage];
+
+        const logEntriesForRecord = encounterEntry
+          ? [encounterEntry, ...battleLogEntries]
+          : battleLogEntries;
+
+        battleRecords.push({
+          id: `battle-${battleSeedHex}`,
+          seed: battleSeedHex,
+          player: playerSnapshot,
+          opponent: wildSnapshot,
+          outcome: result.outcome,
+          rounds: result.rounds,
+          logEntries: logEntriesForRecord,
+          tokensSpent: 0,
+          tokensReward: 0,
+          completedAt,
+        });
+
+        encounterEntry = null;
+
+        if (wildHp <= 0) {
+          const captured = {
+            ...wildBase,
+            hp: wildBase.maxHp ?? wildBase.hp,
+            maxHp: wildBase.maxHp ?? wildBase.hp,
+            id: wildBase.id,
+            stats: { ...wildBase.stats },
+            origin: '포획된 야생 블록몬',
+          };
+          capturedMonsters.push(captured);
+          logs.push({
+            time: formatLogTime(language, offset++),
+            message: t('adventure.log.capture', {
+              species: translateSpecies(wildBase.species, language),
+            }),
+          });
+          break;
+        }
+
+        if (teamRecords.every((member) => member.knockedOut)) {
+          break outer;
+        }
       }
-
-      appendSeed(battleSeedHex, `Wild Battle #${battleRecords.length + 1}`);
-
-      const completedAt = new Date().toISOString();
-      const playerSnapshot = {
-        ...playerMon,
-        hp: result.remainingHp,
-        maxHp: playerMon.maxHp ?? playerMon.hp,
-      };
-      const opponentSnapshot = {
-        ...wild,
-        hp: result.opponentRemainingHp,
-        maxHp: wild.maxHp ?? wild.hp,
-      };
-
-      battleRecords.push({
-        id: `battle-${battleSeedHex}`,
-        seed: battleSeedHex,
-        player: playerSnapshot,
-        opponent: opponentSnapshot,
-        outcome: result.outcome,
-        logEntries: battleEntryLog,
-        tokensSpent: 0,
-        tokensReward: reward,
-        completedAt,
-      });
     }
 
     logs.push({
       time: formatLogTime(language, offset),
-      message: t("adventure.log.complete"),
+      message: t('adventure.log.complete'),
     });
+
+    const teamMaxHpMap = new Map(
+      teamRecords.map((member) => [member.id, member.maxHp ?? member.remainingHp ?? 0]),
+    );
 
     const adventureState = {
       id: `adv-${seedHex}`,
@@ -395,7 +468,7 @@ function GameApp() {
       team: teamRecords,
       potions,
       logs,
-      status: "complete",
+      status: 'complete',
       tokensSpent: 1,
       tokensEarned,
       defeats,
@@ -404,23 +477,36 @@ function GameApp() {
       potionsCarried: potionsToCarry,
       potionsRemaining,
       potionsUsed,
+      capturedMonsters,
     };
 
     if (potionsRemaining > 0) {
       setPotions((prev) => prev + potionsRemaining);
     }
 
+    setBlockmons((prev) => {
+      const restored = prev.map((mon) => {
+        const maxHp = teamMaxHpMap.get(mon.id);
+        if (!maxHp) return mon;
+        const appliedMaxHp = mon.maxHp ?? maxHp;
+        return { ...mon, hp: appliedMaxHp, maxHp: appliedMaxHp };
+      });
+      if (!capturedMonsters.length) {
+        return restored;
+      }
+      return [...restored, ...capturedMonsters];
+    });
+
     if (capturedMonsters.length) {
-      setBlockmons((prev) => [...prev, ...capturedMonsters]);
       setDnaVault((prev) => [
         ...prev,
         ...capturedMonsters.map((mon) => ({
           dna: mon.dna,
           species: mon.species,
           seed: mon.seed,
-          status: "활성",
+          status: '활성',
           acquiredAt: new Date().toISOString(),
-          note: "모험 포획",
+          note: '모험 포획',
         })),
       ]);
     }
@@ -430,71 +516,76 @@ function GameApp() {
     setBattle(battleRecords[battleRecords.length - 1] ?? null);
     setBattleHistory((prev) => [...prev, ...battleRecords]);
     setSystemMessage(
-      t("system.adventureSummary", {
+      t('system.adventureSummary', {
         battles: battleRecords.length,
         captured: capturedMonsters.length,
         tokens: tokensEarned,
-      })
+      }),
     );
-    setCurrentPage("adventure");
+    setCurrentPage('adventure');
     return { success: true };
   };
 
-  const performFusion = (firstId, secondId) => {
-    if (firstId === secondId) {
-      return { error: t("errors.sameBlockmon") };
+
+  const performFusion = (parentIds) => {
+    const uniqueIds = Array.from(new Set(parentIds)).filter(Boolean);
+    if (uniqueIds.length < 2) {
+      return { error: t('fusion.error.selectTwo') };
     }
-    const first = blockmons.find((mon) => mon.id === firstId);
-    const second = blockmons.find((mon) => mon.id === secondId);
-    if (!first || !second) {
-      return { error: t("errors.missingSelected") };
+
+    const parents = uniqueIds
+      .map((id) => blockmons.find((mon) => mon.id === id))
+      .filter(Boolean);
+
+    if (parents.length !== uniqueIds.length) {
+      return { error: t('errors.missingSelected') };
     }
-    if (first.species !== second.species) {
-      return { error: t("errors.sameSpeciesFusion") };
+
+    const baseSpecies = parents[0].species;
+    if (!parents.every((parent) => parent.species === baseSpecies)) {
+      return { error: t('errors.sameSpeciesFusion') };
     }
-    if (tokens < 1) {
-      return { error: t("errors.noTokensFusion") };
+
+    const tokenCost = Math.max(1, uniqueIds.length - 1);
+    if (tokens < tokenCost) {
+      return { error: t('fusion.error.cost', { cost: tokenCost }) };
     }
 
     const fusionSeed = generateSeed();
-    const newborn = fuseBlockmons([first, second], fusionSeed);
+    const newborn = fuseBlockmons(parents, fusionSeed);
 
-    setTokens((prev) => prev - 1);
+    const parentIdSet = new Set(uniqueIds);
+    const parentSeedSet = new Set(parents.map((parent) => parent.seed ?? parent.id));
+
+    setTokens((prev) => prev - tokenCost);
     setBlockmons((prev) => [
-      ...prev.filter((mon) => mon.id !== firstId && mon.id !== secondId),
+      ...prev.filter((mon) => !parentIdSet.has(mon.id)),
       newborn,
     ]);
-    setAdventureSelection((prev) =>
-      prev.filter((id) => id !== firstId && id !== secondId)
-    );
-    setPvpSelection((prev) =>
-      prev.filter((id) => id !== firstId && id !== secondId)
-    );
+    setAdventureSelection((prev) => prev.filter((id) => !parentIdSet.has(id)));
+    setPvpSelection((prev) => prev.filter((id) => !parentIdSet.has(id)));
     setDnaVault((prev) => [
-      ...prev.filter(
-        (entry) =>
-          entry.seed !== (first.seed ?? first.id) &&
-          entry.seed !== (second.seed ?? second.id)
-      ),
+      ...prev.filter((entry) => !parentSeedSet.has(entry.seed)),
       {
         dna: newborn.dna,
         species: newborn.species,
         seed: newborn.seed,
-        status: "보관",
+        status: '보관',
         acquiredAt: new Date().toISOString(),
-        note: "합성 결과",
+        note: '합성 결과',
       },
     ]);
-    appendSeed(formatSeed(fusionSeed), "Fusion Result");
+    appendSeed(formatSeed(fusionSeed), 'Fusion Result');
 
     const record = {
       id: `fusion-${newborn.seed}`,
       result: newborn,
-      parents: [first, second],
+      parents: parents.map((parent) => ({ ...parent })),
       createdAt: new Date().toISOString(),
+      tokensSpent: tokenCost,
     };
     setFusionHistory((prev) => [...prev, record]);
-    setSystemMessage(t("system.fusionCreated"));
+    setSystemMessage(t('system.fusionCreated'));
     return { success: true, newborn: record };
   };
 
@@ -548,7 +639,10 @@ function GameApp() {
     const opponent = createBlockmonFromSeed(opponentSeed, {
       origin: "PVP 상대",
     });
-    const result = rollBattleOutcome(contender, opponent, opponentSeed, t);
+    const result = rollBattleOutcome(contender, opponent, opponentSeed, {
+      language,
+      t: (key, params) => translate(language, key, params),
+    });
     const logs = assembleBattleLog(
       result.rounds,
       result.outcome,
@@ -556,8 +650,7 @@ function GameApp() {
       language,
       contender.species,
       opponent.species,
-      contender.name ?? contender.species,
-      opponent.name ?? opponent.species
+      contender.name ?? contender.species
     );
 
     const stake = 3;

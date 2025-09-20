@@ -153,6 +153,95 @@
   color: rgba(255, 255, 255, 0.8);
 }
 
+.home__overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2500;
+}
+
+.home__overlay-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 10, 26, 0.7);
+  backdrop-filter: blur(4px);
+}
+
+.home__overlay-content {
+  position: relative;
+  background: linear-gradient(150deg, rgba(24, 33, 64, 0.95), rgba(10, 16, 30, 0.94));
+  border-radius: 20px;
+  padding: 28px;
+  width: min(420px, calc(100% - 32px));
+  border: 1px solid rgba(130, 104, 255, 0.4);
+  box-shadow: 0 24px 80px rgba(8, 12, 32, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.home__overlay-content h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.home__overlay-content p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.home__overlay-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.home__overlay-options button {
+  background: linear-gradient(135deg, #6f74ff, #8b50ff);
+  border: none;
+  border-radius: 14px;
+  padding: 0.7em 1.2em;
+  color: #fff;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.home__overlay-options button:hover {
+  transform: translateY(-1px);
+  opacity: 0.92;
+}
+
+.home__overlay-options button:active {
+  transform: translateY(0);
+  opacity: 0.85;
+}
+
+.home__overlay-cancel {
+  align-self: flex-end;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.home__overlay-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+
 .home__clear:disabled {
   opacity: 0.4;
   cursor: default;
@@ -199,6 +288,7 @@
   flex-direction: column;
   gap: 10px;
   transition: border-color 0.2s ease, transform 0.2s ease;
+  position: relative;
 }
 
 .blockmon-card--selectable {
@@ -213,6 +303,23 @@
 .blockmon-card--selected {
   border-color: #8a5fff;
   box-shadow: 0 0 20px rgba(138, 93, 255, 0.35);
+}
+
+.blockmon-card__order {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7a86ff, #9a63ff);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(120, 134, 255, 0.4);
 }
 
 .blockmon-card__header {
@@ -313,6 +420,10 @@
   color: #ff7d7d;
 }
 
+.battle-log__entry--potion {
+  color: #ffd166;
+}
+
 .battle-log__timestamp {
   font-family: 'JetBrains Mono', monospace;
   color: rgba(255, 255, 255, 0.45);
@@ -347,6 +458,20 @@
 
 .adventure__member.is-ko .adventure__status {
   color: #ff9393;
+}
+
+.adventure__captures {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.adventure__captures-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .battle__arena {
@@ -401,6 +526,75 @@
 
 .fusion__cost {
   color: rgba(255, 255, 255, 0.7);
+}
+
+.fusion__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.fusion__header h2 {
+  margin: 0;
+}
+
+.fusion__execute {
+  background: linear-gradient(135deg, #8b50ff, #6f74ff);
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  padding: 8px 20px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.fusion__execute:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+
+.fusion__execute:not(:disabled):hover {
+  transform: translateY(-1px);
+  opacity: 0.9;
+}
+
+.fusion__quick-select {
+  margin: 16px 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fusion__quick-select-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.fusion__quick-select-buttons button {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.fusion__quick-select-buttons button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.fusion__quick-select-buttons button.is-active {
+  background: linear-gradient(135deg, #8b50ff, #6f74ff);
+  border-color: rgba(130, 104, 255, 0.6);
+  color: #fff;
 }
 
 .fusion__preview,

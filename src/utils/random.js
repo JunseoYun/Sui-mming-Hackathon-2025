@@ -1,3 +1,5 @@
+import { translateSpecies } from '../i18n';
+
 const speciesCatalog = [
   {
     id: "orca",
@@ -151,32 +153,56 @@ export function createBlockmonFromSeed(seed, options = {}) {
 }
 
 export function fuseBlockmons(parents, seed) {
-  if (!Array.isArray(parents) || parents.length !== 2) {
-    throw new Error("fusion requires two parents");
+  if (!Array.isArray(parents) || parents.length < 2) {
+    throw new Error("fusion requires at least two parents");
   }
-  const [first, second] = parents;
+
+  const primarySpecies = parents[0].species;
+  if (!parents.every((parent) => parent.species === primarySpecies)) {
+    throw new Error("fusion parents must share the same species");
+  }
+
   const baseSpecies =
-    speciesCatalog.find((entry) => entry.name === first.species) ??
+    speciesCatalog.find((entry) => entry.name === primarySpecies) ??
     pickSpecies(seed);
-  const fusionSeed =
-    seed ^
-    BigInt(parseInt(first.seed.slice(0, 8), 16)) ^
-    BigInt(parseInt(second.seed.slice(8, 16), 16));
+
+  let fusionSeed = seed;
+  parents.forEach((parent) => {
+    const seedHex = parent.seed ?? formatSeed(generateSeed());
+    fusionSeed ^= BigInt(`0x${seedHex}`);
+  });
   const rng = lcg(fusionSeed);
 
+  const dominant = parents.reduce((best, current) => {
+    const bestPower = best?.power ?? -Infinity;
+    return (current.power ?? 0) > bestPower ? current : best;
+  }, parents[0]);
+
+  const countBonus = parents.length;
   const stats = {};
   let statSum = 0;
   statKeys.forEach((key, index) => {
-    const avg = Math.round((first.stats[key] + second.stats[key]) / 2);
-    const adjustment =
-      Math.floor(rng() * (4 + index)) - Math.floor(rng() * (2 + index));
-    const value = Math.max(4, avg + adjustment);
+    const total = parents.reduce((sum, parent) => sum + (parent.stats?.[key] ?? 0), 0);
+    const avg = total / parents.length;
+    const dominantValue = dominant.stats?.[key] ?? avg;
+    const swing = (dominantValue - avg) * 0.6;
+    const variance = Math.floor(rng() * (4 + index));
+    const base = avg + swing + countBonus * 0.75 + variance;
+    const value = Math.max(4, Math.round(base));
     stats[key] = value;
     statSum += value;
   });
 
-  const hp = Math.round((first.hp + second.hp) / 2 + rng() * 20);
-  const rarity = determineRarity(statSum + Math.floor(hp / 3));
+  const avgHp = parents.reduce(
+    (sum, parent) => sum + (parent.maxHp ?? parent.hp ?? 0),
+    0,
+  ) / parents.length;
+  const dominantHp = dominant.maxHp ?? dominant.hp ?? avgHp;
+  const hpBase = avgHp + (dominantHp - avgHp) * 0.6 + countBonus * 10;
+  const hp = Math.max(10, Math.round(hpBase + rng() * 12));
+
+  const rarityScore = statSum + Math.floor(hp / 3) + countBonus * 6;
+  const rarity = determineRarity(rarityScore);
 
   return {
     id: `fusion-${formatSeed(seed)}`,
@@ -193,38 +219,60 @@ export function fuseBlockmons(parents, seed) {
     origin: "합성 DNA",
     power: statSum + hp,
     parents: parents.map((p) => ({ id: p.id, dna: p.dna, species: p.species })),
+    fusionCount: parents.length,
   };
 }
 
-export function rollBattleOutcome(player, opponent, seed, t) {
+export function rollBattleOutcome(player, opponent, seed, options = {}) {
   const rng = lcg(seed);
   const initiativeScore =
     player.stats.dex - opponent.stats.dex + Math.floor(rng() * 6) - 3;
   const firstAttacker = initiativeScore >= 0 ? "player" : "opponent";
   const rounds = [];
 
+  const language = options.language ?? 'ko';
+  const nameFor = (species) => translateSpecies(species, language) || species;
+
   const battleState = {
     player: {
       hp: player.hp,
       maxHp: player.hp,
       ...player,
-      effects: { turtleShell: 0, planktonHealUsed: false, mermaidSkip: false, krakenMiss: false },
+      effects: {
+        turtleShell: 0,
+        planktonHealUsed: false,
+        mermaidSkip: null,
+        krakenMiss: false,
+        skillsUsed: Object.create(null),
+      },
+      potionUsed: false,
     },
     opponent: {
       hp: opponent.hp,
       maxHp: opponent.hp,
       ...opponent,
-      effects: { turtleShell: 0, planktonHealUsed: false, mermaidSkip: false, krakenMiss: false },
+      effects: {
+        turtleShell: 0,
+        planktonHealUsed: false,
+        mermaidSkip: null,
+        krakenMiss: false,
+        skillsUsed: Object.create(null),
+      },
     },
     rng,
     rounds,
-    t,
+    t: options.t ?? (() => ''),
+    language,
+    nameFor,
+    potionsRemaining: Math.max(0, options.potionsAvailable ?? 0),
   };
+
+  const { t } = battleState;
 
   let attacker = firstAttacker === 'player' ? battleState.player : battleState.opponent;
   let defender = firstAttacker === 'player' ? battleState.opponent : battleState.player;
 
-  while (battleState.player.hp > 0 && battleState.opponent.hp > 0 && battleState.rounds.length < 20) {
+  while (battleState.player.hp > 0 && battleState.opponent.hp > 0 && battleState.rounds.length < 40) {
     applySkills(attacker, defender, battleState);
 
     if (defender.hp <= 0) {
@@ -232,11 +280,16 @@ export function rollBattleOutcome(player, opponent, seed, t) {
     }
 
     if (attacker.effects.mermaidSkip) {
-        attacker.effects.mermaidSkip = false;
+        const skipEffect = attacker.effects.mermaidSkip;
+        attacker.effects.mermaidSkip = null;
         battleState.rounds.push({
-            actor: attacker.species,
-            action: `${attacker.species}의 ${t(attacker.skill.name)} 효과로 행동을 건너뜁니다.`,
-            detail: "",
+            actor: attacker === battleState.player ? 'player' : 'opponent',
+            actorSpecies: attacker.species,
+            action: t('battleLog.skill.effect.skipTurn', {
+              source: battleState.nameFor(skipEffect?.sourceSpecies ?? defender.species),
+              skill: t(skipEffect?.skillName ?? 'skill.mermaid.name'),
+            }),
+            detail: t('battleLog.detail.noAction'),
             playerHp: battleState.player.hp,
             opponentHp: battleState.opponent.hp,
         });
@@ -244,7 +297,7 @@ export function rollBattleOutcome(player, opponent, seed, t) {
         continue;
     }
 
-    const phase = attackPhase(attacker, defender, battleState.rng, t);
+    const phase = attackPhase(attacker, defender, battleState);
     
     // Update hp in battleState
     if (attacker === battleState.player) {
@@ -253,26 +306,51 @@ export function rollBattleOutcome(player, opponent, seed, t) {
         battleState.player.hp = defender.hp;
     }
 
-    if (phase.skillUsed) {
-        battleState.rounds.push({
-            actor: attacker.species,
-            action: phase.skillUsed,
-            detail: `${phase.damage} 피해`,
-            playerHp: battleState.player.hp,
-            opponentHp: battleState.opponent.hp,
-        });
-    } else {
-        battleState.rounds.push({
-            actor: attacker.species,
-            action: phase.result === "miss" ? "공격이 빗나갔습니다." : phase.result === "crit" ? "치명타!" : "공격",
-            detail: phase.result === "miss" ? "데미지 없음" : `${phase.damage} 피해`,
-            playerHp: battleState.player.hp,
-            opponentHp: battleState.opponent.hp,
-        });
-    }
+    const actorSide = attacker === battleState.player ? 'player' : 'opponent';
+    const defaultActionKey =
+      phase.result === 'miss'
+        ? 'battleLog.action.miss'
+        : phase.result === 'crit'
+        ? 'battleLog.action.crit'
+        : 'battleLog.action.basic';
+    const actionText = phase.skillUsed?.action ?? t(defaultActionKey);
+    const baseDetail =
+      phase.result === 'miss' && !phase.skillUsed
+        ? t('battleLog.detail.noDamage')
+        : t('battleLog.detail.damage', { value: phase.damage });
+    const detailText = phase.skillUsed?.detail ?? baseDetail;
+
+    battleState.rounds.push({
+        actor: actorSide,
+        actorSpecies: attacker.species,
+        action: actionText,
+        detail: detailText,
+        playerHp: battleState.player.hp,
+        opponentHp: battleState.opponent.hp,
+    });
 
     if (defender.hp <= 0) {
         break;
+    }
+
+    if (
+      attacker === battleState.opponent &&
+      battleState.player.hp > 0 &&
+      battleState.potionsRemaining > 0 &&
+      !battleState.player.potionUsed &&
+      battleState.player.hp < (options.playerMaxHp ?? battleState.player.maxHp ?? battleState.player.hp) * 0.5
+    ) {
+      battleState.potionsRemaining -= 1;
+      battleState.player.potionUsed = true;
+      battleState.player.hp = options.playerMaxHp ?? battleState.player.maxHp ?? battleState.player.hp;
+      battleState.rounds.push({
+        actor: 'potion',
+        actorSpecies: battleState.player.species,
+        action: 'potion',
+        detail: '',
+        playerHp: battleState.player.hp,
+        opponentHp: battleState.opponent.hp,
+      });
     }
 
     [attacker, defender] = [defender, attacker];
@@ -286,18 +364,43 @@ export function rollBattleOutcome(player, opponent, seed, t) {
     outcome,
     remainingHp: Math.max(battleState.player.hp, 0),
     opponentRemainingHp: Math.max(battleState.opponent.hp, 0),
+    potionsUsed: battleState.player.potionUsed ? 1 : 0,
   };
 }
 
+function markSkillUsed(entity, key) {
+    const skills = entity.effects.skillsUsed ?? (entity.effects.skillsUsed = Object.create(null));
+    skills[key] = true;
+}
+
+function hasUsedSkill(entity, key) {
+    return !!(entity.effects.skillsUsed && entity.effects.skillsUsed[key]);
+}
+
 function applySkills(attacker, defender, battleState) {
-    const { t } = battleState;
+    const { t, nameFor } = battleState;
+    const actorSide = attacker === battleState.player ? 'player' : 'opponent';
+    const attackerName = nameFor(attacker.species);
+    const attackerSkill = t(attacker.skill.name);
     // Leviathan Skill
-    if (attacker.skill.name === "skill.leviathan.name" && battleState.rng() < 0.05) {
+    if (
+      attacker.skill.name === "skill.leviathan.name" &&
+      !hasUsedSkill(attacker, 'leviathan') &&
+      battleState.rng() < 0.05
+    ) {
+        markSkillUsed(attacker, 'leviathan');
         if (defender.effects.turtleShell > 0) {
             battleState.rounds.push({
-                actor: attacker.species,
-                action: `${attacker.species}의 ${t(attacker.skill.name)} 발동!`,
-                detail: `${defender.species}는 ${t("skill.turtle.name")} 효과로 보호받고 있습니다!`,
+                actor: actorSide,
+                actorSpecies: attacker.species,
+                action: t('battleLog.skill.activate', {
+                  name: attackerName,
+                  skill: attackerSkill,
+                }),
+                detail: t('battleLog.skill.detail.blocked', {
+                  defender: nameFor(defender.species),
+                  skill: t('skill.turtle.name'),
+                }),
                 playerHp: battleState.player.hp,
                 opponentHp: battleState.opponent.hp,
             });
@@ -306,9 +409,13 @@ function applySkills(attacker, defender, battleState) {
             const playerHp = attacker === battleState.player ? battleState.player.hp : defender.hp;
             const opponentHp = attacker === battleState.player ? defender.hp : battleState.player.hp;
             battleState.rounds.push({
-                actor: attacker.species,
-                action: `${attacker.species}의 ${t(attacker.skill.name)} 발동!`,
-                detail: "상대를 즉사시켰습니다!",
+                actor: actorSide,
+                actorSpecies: attacker.species,
+                action: t('battleLog.skill.activate', {
+                  name: attackerName,
+                  skill: attackerSkill,
+                }),
+                detail: t('battleLog.skill.detail.instant'),
                 playerHp,
                 opponentHp,
             });
@@ -317,66 +424,132 @@ function applySkills(attacker, defender, battleState) {
     }
 
     // Turtle Skill
-    if (attacker.skill.name === "skill.turtle.name" && attacker.effects.turtleShell === 0 && battleState.rng() < 0.25) {
+    if (
+      attacker.skill.name === "skill.turtle.name" &&
+      attacker.effects.turtleShell === 0 &&
+      !hasUsedSkill(attacker, 'turtle') &&
+      battleState.rng() < 0.25
+    ) {
+        markSkillUsed(attacker, 'turtle');
         attacker.effects.turtleShell = 2;
         battleState.rounds.push({
-            actor: attacker.species,
-            action: `${attacker.species}가 ${t(attacker.skill.name)}을 사용!`,
-            detail: "2턴 동안 무적이 됩니다.",
+            actor: actorSide,
+            actorSpecies: attacker.species,
+            action: t('battleLog.skill.use', {
+              name: attackerName,
+              skill: attackerSkill,
+            }),
+            detail: t('battleLog.skill.detail.shell', { turns: 2 }),
             playerHp: battleState.player.hp,
             opponentHp: battleState.opponent.hp,
         });
     }
 
     // Mermaid Skill
-    if (attacker.skill.name === "skill.mermaid.name" && battleState.rng() < 0.3) {
-        defender.effects.mermaidSkip = true;
+    if (
+      attacker.skill.name === "skill.mermaid.name" &&
+      !hasUsedSkill(attacker, 'mermaid') &&
+      battleState.rng() < 0.3
+    ) {
+        markSkillUsed(attacker, 'mermaid');
+        defender.effects.mermaidSkip = {
+          sourceSpecies: attacker.species,
+          skillName: attacker.skill.name,
+        };
         battleState.rounds.push({
-            actor: attacker.species,
-            action: `${attacker.species}가 ${t(attacker.skill.name)}을 사용!`,
-            detail: "상대의 다음 턴을 건너뜁니다.",
+            actor: actorSide,
+            actorSpecies: attacker.species,
+            action: t('battleLog.skill.use', {
+              name: attackerName,
+              skill: attackerSkill,
+            }),
+            detail: t('battleLog.skill.detail.skip'),
             playerHp: battleState.player.hp,
             opponentHp: battleState.opponent.hp,
         });
     }
 
     // Kraken Skill
-    if (attacker.skill.name === "skill.kraken.name" && battleState.rng() < 0.4) {
+    if (
+      attacker.skill.name === "skill.kraken.name" &&
+      !hasUsedSkill(attacker, 'kraken') &&
+      battleState.rng() < 0.4
+    ) {
+        markSkillUsed(attacker, 'kraken');
         defender.effects.krakenMiss = true;
         battleState.rounds.push({
-            actor: attacker.species,
-            action: `${attacker.species}가 ${t(attacker.skill.name)}을 사용!`,
-            detail: "상대의 다음 공격이 빗나갑니다.",
+            actor: actorSide,
+            actorSpecies: attacker.species,
+            action: t('battleLog.skill.use', {
+              name: attackerName,
+              skill: attackerSkill,
+            }),
+            detail: t('battleLog.skill.detail.miss'),
             playerHp: battleState.player.hp,
             opponentHp: battleState.opponent.hp,
         });
     }
 
     // Plankton Skill
-    if (attacker.skill.name === "skill.plankton.name" && !attacker.effects.planktonHealUsed && attacker.hp / attacker.maxHp < 0.2) {
+    if (
+      attacker.skill.name === "skill.plankton.name" &&
+      !attacker.effects.planktonHealUsed &&
+      !hasUsedSkill(attacker, 'plankton') &&
+      attacker.hp / attacker.maxHp < 0.2
+    ) {
+        markSkillUsed(attacker, 'plankton');
         attacker.hp = attacker.maxHp * 0.5;
         attacker.effects.planktonHealUsed = true;
         const playerHp = attacker === battleState.player ? attacker.hp : battleState.opponent.hp;
         const opponentHp = attacker === battleState.player ? battleState.opponent.hp : attacker.hp;
         battleState.rounds.push({
-            actor: attacker.species,
-            action: `${attacker.species}의 ${t(attacker.skill.name)} 발동!`,
-            detail: `체력을 ${attacker.hp.toFixed(0)}까지 회복!`,
+            actor: actorSide,
+            actorSpecies: attacker.species,
+            action: t('battleLog.skill.activate', {
+              name: attackerName,
+              skill: attackerSkill,
+            }),
+            detail: t('battleLog.skill.detail.heal', {
+              hp: Math.round(attacker.hp),
+            }),
             playerHp,
             opponentHp,
         });
     }
 }
 
-function attackPhase(attacker, defender, rng, t) {
+function attackPhase(attacker, defender, battleState) {
+    const { rng, t, nameFor } = battleState;
+    const attackerName = nameFor(attacker.species);
+    const defenderName = nameFor(defender.species);
     if (defender.effects.turtleShell > 0) {
         defender.effects.turtleShell--;
-        return { damage: 0, result: "immune", skillUsed: `${defender.species}의 ${t(defender.skill.name)} 효과로 공격이 무효화되었습니다.` };
+        return {
+          damage: 0,
+          result: "immune",
+          skillUsed: {
+            action: t('battleLog.skill.detail.nullified', {
+              defender: defenderName,
+              skill: t(defender.skill.name),
+            }),
+            detail: t('battleLog.detail.noDamage'),
+          },
+        };
     }
 
     if (defender.effects.krakenMiss) {
         defender.effects.krakenMiss = false;
-        return { damage: 0, result: "miss", skillUsed: `${defender.species}의 ${t(defender.skill.name)} 효과로 공격이 빗나갔습니다.` };
+        return {
+          damage: 0,
+          result: "miss",
+          skillUsed: {
+            action: t('battleLog.skill.detail.forcedMiss', {
+              defender: defenderName,
+              skill: t(defender.skill.name),
+            }),
+            detail: t('battleLog.detail.noDamage'),
+          },
+        };
     }
 
     const accuracy = attacker.stats.dex + attacker.stats.int / 2 + Math.floor(rng() * 12);
@@ -393,9 +566,19 @@ function attackPhase(attacker, defender, rng, t) {
     let totalDamage = Math.max(4, Math.round(baseDamage + variance)) * (isCrit ? 2 : 1);
     let skillUsed = null;
 
-    if (attacker.skill.name === "skill.orca.name" && rng() < 0.5) {
+    if (
+      attacker.skill.name === "skill.orca.name" &&
+      !hasUsedSkill(attacker, 'orca') &&
+      rng() < 0.5
+    ) {
+        markSkillUsed(attacker, 'orca');
         totalDamage *= 2;
-        skillUsed = `${attacker.species}의 ${t(attacker.skill.name)}! 데미지 2배!`;
+        skillUsed = {
+          action: t('battleLog.skill.orca', {
+            name: attackerName,
+            skill: t(attacker.skill.name),
+          }),
+        };
     }
 
     const mitigation = defender.stats.con / 2;

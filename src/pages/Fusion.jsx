@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import BlockmonCard from '../components/BlockmonCard'
 import { translateSpecies } from '../i18n'
+import { fuseBlockmons } from '../utils/random'
 
 export default function Fusion({ gameState, actions }) {
   const { blockmons, tokens, language, t } = gameState
@@ -29,50 +30,77 @@ export default function Fusion({ gameState, actions }) {
     })
   }
 
+  const speciesGroups = useMemo(() => {
+    const map = new Map()
+    blockmons.forEach((blockmon) => {
+      if (!map.has(blockmon.species)) {
+        map.set(blockmon.species, [])
+      }
+      map.get(blockmon.species).push(blockmon)
+    })
+    return Array.from(map.entries())
+      .map(([species, members]) => ({
+        species,
+        members: [...members].sort((a, b) => (b.power ?? 0) - (a.power ?? 0)),
+        count: members.length,
+        label: translateSpecies(species, language) || species,
+      }))
+      .filter((entry) => entry.count >= 2)
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+  }, [blockmons, language])
+
   const selectedBlockmons = useMemo(
     () => blockmons.filter((blockmon) => selected.includes(blockmon.id)),
     [blockmons, selected]
   )
 
+  const handleQuickSelect = (species) => {
+    setResultMessage('')
+    setError('')
+    const group = speciesGroups.find((entry) => entry.species === species)
+    if (!group) return
+    setSelected(group.members.map((member) => member.id))
+  }
+
+  const fusionSpecies = selectedBlockmons[0]?.species
+  const fusionValid = useMemo(
+    () =>
+      selectedBlockmons.length >= 2 &&
+      selectedBlockmons.every((blockmon) => blockmon.species === fusionSpecies),
+    [selectedBlockmons, fusionSpecies],
+  )
+
+  const fusionCost = fusionValid
+    ? Math.max(1, selectedBlockmons.length - 1)
+    : 0
+
   const preview = useMemo(() => {
-    const [first, second] = selectedBlockmons
-    if (!first || !second) return null
-    if (first.species !== second.species) return null
-    const stats = {}
-    Object.keys(first.stats).forEach((key) => {
-      stats[key] = Math.round((first.stats[key] + second.stats[key]) / 2 + 1)
-    })
-    return {
-      id: 'preview',
-      name: `${translateSpecies(first.species, language)} Prototype`,
-      species: first.species,
-      dna: 'PREVIEW',
-      hp: Math.round((first.hp + second.hp) / 2 + 10),
-      stats,
-      rank: 'Preview',
-      origin: '합성 DNA',
-      temperament: '합성으로 각성한 유전자',
-      power: Math.round((first.power + second.power) / 2)
+    if (!fusionValid) return null
+    try {
+      const simulated = fuseBlockmons(selectedBlockmons, 0n)
+      return { ...simulated, id: 'preview' }
+    } catch (error) {
+      console.warn('[Fusion] Preview generation failed', error)
+      return null
     }
-  }, [selectedBlockmons, language, t])
+  }, [fusionValid, selectedBlockmons])
 
   const performFusion = () => {
-    if (selectedBlockmons.length < 2) {
-      setError(t('fusion.error.selectTwo'))
-      return
-    }
-    const [first, second] = selectedBlockmons
-    if (first.species !== second.species) {
-      setError(t('fusion.error.sameSpecies'))
+    if (!fusionValid) {
+      setError(
+        selectedBlockmons.length < 2
+          ? t('fusion.error.selectTwo')
+          : t('fusion.error.sameSpecies')
+      )
       return
     }
 
-    const result = actions.performFusion(first.id, second.id)
+    const result = actions.performFusion(selectedBlockmons.map((blockmon) => blockmon.id))
     if (result?.error) {
       setError(result.error)
     } else {
-      const remaining = selected.filter((id) => id !== first.id && id !== second.id)
-      setSelected(remaining)
+      const usedIds = new Set(selectedBlockmons.map((blockmon) => blockmon.id))
+      setSelected((prev) => prev.filter((id) => !usedIds.has(id)))
       const newborn = result.newborn?.result ?? result.newborn
       const newbornName = newborn?.name ?? t('fusion.alert.title', { name: 'Blockmon' })
       setResultMessage(t('fusion.result.message', { name: newbornName }))
@@ -83,6 +111,10 @@ export default function Fusion({ gameState, actions }) {
     }
   }
 
+  const fusionButtonLabel = fusionValid
+    ? t('fusion.button.executeDynamic', { cost: fusionCost })
+    : t('fusion.button.execute')
+
   return (
     <div className="page page--fusion">
       <header className="page__header">
@@ -91,8 +123,42 @@ export default function Fusion({ gameState, actions }) {
       </header>
 
       <section>
-        <h2>{t('fusion.section.blockmons')}</h2>
+        <div className="fusion__header">
+          <h2>{t('fusion.section.blockmons')}</h2>
+          <button
+            type="button"
+            className="fusion__execute"
+            onClick={performFusion}
+            disabled={!fusionValid || tokens < fusionCost}
+          >
+            {fusionButtonLabel}
+          </button>
+        </div>
         <p>{t('fusion.tokens', { value: tokens })}</p>
+        {speciesGroups.length > 0 && (
+          <div className="fusion__quick-select">
+            <h3>{t('fusion.quickSelect.title')}</h3>
+            <div className="fusion__quick-select-buttons">
+              {speciesGroups.map((group) => {
+                const isGroupSelected =
+                  selectedBlockmons.length === group.count &&
+                  selectedBlockmons.every((blockmon) => blockmon.species === group.species)
+              return (
+                <button
+                  type="button"
+                  key={group.species}
+                  className={isGroupSelected ? 'is-active' : ''}
+                  onClick={() => handleQuickSelect(group.species)}
+                >
+                  {t('fusion.quickSelect.button', {
+                    species: group.label,
+                    count: group.count,
+                  })}
+                </button>
+              )})}
+            </div>
+          </div>
+        )}
         <div className="blockmon-grid">
           {blockmons.map((blockmon) => (
             <BlockmonCard
@@ -116,7 +182,16 @@ export default function Fusion({ gameState, actions }) {
                 </li>
               ))}
             </ol>
-            {selectedBlockmons.length > 2 && <p>{t('fusion.selection.notice')}</p>}
+            {selectedBlockmons.length > 0 && (
+              <p className="fusion__cost">
+                {t('fusion.cost.summary', {
+                  count: selectedBlockmons.length,
+                  cost: fusionCost,
+                  tokens,
+                })}
+              </p>
+            )}
+            {selectedBlockmons.length > 1 && <p>{t('fusion.selection.notice')}</p>}
           </div>
         )}
       </section>
@@ -132,9 +207,6 @@ export default function Fusion({ gameState, actions }) {
       {resultMessage && <p>{resultMessage}</p>}
 
       <div className="fusion__actions">
-        <button onClick={performFusion} disabled={tokens < 1 || selectedBlockmons.length < 2}>
-          {t('fusion.button.execute')}
-        </button>
         <button onClick={() => actions.navigate('home')}>{t('fusion.button.home')}</button>
       </div>
     </div>

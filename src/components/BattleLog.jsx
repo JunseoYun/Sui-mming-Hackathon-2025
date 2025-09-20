@@ -8,7 +8,15 @@ export default function BattleLog({ entries = [], t }) {
         {entries.map((entry, index) => (
           <p
             key={index}
-            className={`battle-log__entry${entry.actorType === 'player' ? ' battle-log__entry--player' : entry.actorType === 'opponent' ? ' battle-log__entry--opponent' : ''}`}
+            className={`battle-log__entry${
+              entry.actorType === 'player'
+                ? ' battle-log__entry--player'
+                : entry.actorType === 'opponent'
+                ? ' battle-log__entry--opponent'
+                : entry.actorType === 'potion'
+                ? ' battle-log__entry--potion'
+                : ''
+            }`}
           >
             <span className="battle-log__timestamp">{entry.time}</span>
             <span>{entry.message}</span>

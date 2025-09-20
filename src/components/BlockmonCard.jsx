@@ -1,13 +1,20 @@
 import React from 'react'
-import { translateSpecies, translateTemperament, translateOrigin } from '../i18n'
+import { translateSpecies, translateTemperament } from '../i18n'
 
-export default function BlockmonCard({ blockmon, onSelect, selectable = false, isSelected = false, t }) {
-  const { name, dna, species, hp, stats, rank, origin, temperament, power, skill } = blockmon
-  const speciesLabel = translateSpecies(species, t.language)
-  const originLabel = origin ? t('blockmon.origin', { value: translateOrigin(origin, t.language) }) : null
-  const temperamentLabel = temperament ? t('blockmon.temperament', { value: translateTemperament(temperament, t.language) }) : null
+export default function BlockmonCard({
+  blockmon,
+  onSelect,
+  selectable = false,
+  isSelected = false,
+  order = -1,
+  language = 'ko',
+  t = () => '',
+}) {
+  const { name, dna, species, hp, stats, rank, temperament, power, skill } = blockmon
+  const speciesLabel = translateSpecies(species, language)
+  const temperamentLabel = temperament ? t('blockmon.temperament', { value: translateTemperament(temperament, language) }) : null
   const powerLabel = power ? t('blockmon.powerLabel') : null
-  const displayName = t.language === 'en' ? speciesLabel || name : name
+  const displayName = language === 'en' ? speciesLabel || name : name
   const skillName = skill ? t(skill.name) : ''
   const skillDescription = skill ? t(skill.description) : ''
 
@@ -16,6 +23,7 @@ export default function BlockmonCard({ blockmon, onSelect, selectable = false, i
       className={`blockmon-card${isSelected ? ' blockmon-card--selected' : ''}${selectable ? ' blockmon-card--selectable' : ''}`}
       onClick={selectable ? () => onSelect?.(blockmon) : undefined}
     >
+      {isSelected && order >= 0 && <div className="blockmon-card__order">{order + 1}</div>}
       <div className="blockmon-card__header">
         <span className="blockmon-card__species">{speciesLabel || species}</span>
         <span className="blockmon-card__dna">DNA #{dna}</span>
@@ -26,7 +34,6 @@ export default function BlockmonCard({ blockmon, onSelect, selectable = false, i
       </div>
       <div className="blockmon-card__hp">HP {hp}</div>
       {power && powerLabel && <div className="blockmon-card__power">{powerLabel} {power}</div>}
-      {originLabel && <div className="blockmon-card__origin">{originLabel}</div>}
       {temperamentLabel && <div className="blockmon-card__temperament">{temperamentLabel}</div>}
       <ul className="blockmon-card__stats">
         <li>STR {stats.str}</li>

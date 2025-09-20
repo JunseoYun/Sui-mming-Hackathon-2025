@@ -5,6 +5,8 @@ import BattleLog from '../components/BattleLog'
 export default function Adventure({ gameState, actions }) {
   const { adventure, blockmons, language, t } = gameState
 
+  const capturedMonsters = adventure?.capturedMonsters ?? []
+
   const activeTeam = useMemo(() => {
     if (!adventure) return []
     return adventure.team.map((member) => {
@@ -71,6 +73,27 @@ export default function Adventure({ gameState, actions }) {
       </div>
 
       <BattleLog entries={adventure.logs} t={t} />
+
+      {capturedMonsters.length > 0 && (
+        <section className="adventure__captures">
+          <div className="adventure__captures-header">
+            <h2>{t('adventure.captures.title')}</h2>
+            <span>
+              {t('adventure.captures.count', { count: capturedMonsters.length })}
+            </span>
+          </div>
+          <div className="blockmon-grid blockmon-grid--compact">
+            {capturedMonsters.map((blockmon) => (
+              <BlockmonCard
+                key={blockmon.id}
+                blockmon={blockmon}
+                language={language}
+                t={t}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="page__footer-actions">
         <button onClick={() => actions.navigate('home')}>{t('adventure.footer.home')}</button>
