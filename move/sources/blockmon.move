@@ -10,7 +10,7 @@ use sui::event;
 
 public struct BlockMon has key, store {
     id: UID,
-    monId: String,
+    mon_id: String,
     name: String,
     base: MonStat,
     skill: MonSkill,
@@ -41,8 +41,8 @@ public struct BattleRecorded has copy, drop, store {
   mon: address,
   opponent: String,
   won: bool,
-  playerRemainingHp: u64,
-  opponentRemainingHp: u64,
+  player_remaining_hp: u64,
+  opponent_remaining_hp: u64,
 }
 
 public struct Burned has copy, drop, store {
@@ -50,8 +50,8 @@ public struct Burned has copy, drop, store {
   mon: address,
 }
 
-public fun createBlockMon(
-  monId: String,
+public fun create_block_mon(
+  mon_id: String,
   name: String,
   hp: u64,
   str: u64,
@@ -60,13 +60,13 @@ public fun createBlockMon(
   int: u64,
   wis: u64,
   cha: u64,
-  skillName: String,
-  skillDescription: String,
+  skill_name: String,
+  skill_description: String,
   ctx: &mut TxContext,
 ): BlockMon {
   let skill = MonSkill {
-    name: skillName,
-    description: skillDescription,
+    name: skill_name,
+    description: skill_description,
   };
   let base = MonStat {
     hp: hp,
@@ -77,35 +77,35 @@ public fun createBlockMon(
     wis: wis,
     cha: cha,
   };
-  let blockMon = BlockMon {
+  let block_mon = BlockMon {
     id: object::new(ctx),
-    monId: monId,
+    mon_id: mon_id,
     name: name,
     base: base,
     skill: skill,
   };
   let owner = tx_context::sender(ctx);
-  let mon_addr = object::uid_to_address(&blockMon.id);
+  let mon_addr = object::uid_to_address(&block_mon.id);
   event::emit(Minted { owner, mon: mon_addr });
-  blockMon
+  block_mon
 }
 
-public fun recordBattle(
+public fun record_battle(
   mon: &BlockMon,
   opponent: String,
   won: bool,
-  playerRemainingHp: u64,
-  opponentRemainingHp: u64,
+  player_remaining_hp: u64,
+  opponent_remaining_hp: u64,
   ctx: &mut TxContext,
 ) {
   let player = tx_context::sender(ctx);
   let mon_addr = object::uid_to_address(&mon.id);
-  event::emit(BattleRecorded { player, mon: mon_addr, opponent, won, playerRemainingHp, opponentRemainingHp });
+  event::emit(BattleRecorded { player, mon: mon_addr, opponent, won, player_remaining_hp, opponent_remaining_hp });
 }
 
 // --------- READ (getters) ---------
 public fun get_object_address(mon: &BlockMon): address { object::uid_to_address(&mon.id) }
-public fun get_mon_id(mon: &BlockMon): &String { &mon.monId }
+public fun get_mon_id(mon: &BlockMon): &String { &mon.mon_id }
 public fun get_name(mon: &BlockMon): &String { &mon.name }
 public fun get_base(mon: &BlockMon): &MonStat { &mon.base }
 public fun get_skill(mon: &BlockMon): &MonSkill { &mon.skill }
@@ -121,7 +121,7 @@ public fun get_cha(mon: &BlockMon): u64 { mon.base.cha }
 
 // --------- UPDATE (setters) ---------
 public fun set_name(mon: &mut BlockMon, name: String) { mon.name = name }
-public fun set_mon_id(mon: &mut BlockMon, mon_id: String) { mon.monId = mon_id }
+public fun set_mon_id(mon: &mut BlockMon, mon_id: String) { mon.mon_id = mon_id }
 public fun set_base(mon: &mut BlockMon, base: MonStat) { mon.base = base }
 public fun set_skill(mon: &mut BlockMon, skill: MonSkill) { mon.skill = skill }
 
@@ -142,7 +142,7 @@ public fun set_stats(
 public fun burn(mon: BlockMon, ctx: &mut TxContext) {
   let owner = tx_context::sender(ctx);
   let mon_addr = object::uid_to_address(&mon.id);
-  let BlockMon { id, monId: _, name: _, base: _, skill: _ } = mon;
+  let BlockMon { id, mon_id: _, name: _, base: _, skill: _ } = mon;
   event::emit(Burned { owner, mon: mon_addr });
   object::delete(id);
 }

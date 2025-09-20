@@ -3,6 +3,9 @@ module blockmon::inventory;
 
 use std::string::String;
 use sui::event;
+// ===== Error Codes =====
+const E_INSUFFICIENT_BM_BALANCE: u64 = 1;
+const E_INSUFFICIENT_POTION_QUANTITY: u64 = 2;
 // coin module imported implicitly via fully-qualified paths when needed
 // ========== BM COIN (Coin<BM>) ==========
 
@@ -142,7 +145,7 @@ public fun subtract_bm_tokens(
     let token_id = object::uid_to_address(&bm_token.id);
     let old_amount = bm_token.amount;
     
-    assert!(bm_token.amount >= amount_to_subtract, 0); // 에러: 잔액 부족
+    assert!(bm_token.amount >= amount_to_subtract, E_INSUFFICIENT_BM_BALANCE);
     bm_token.amount = bm_token.amount - amount_to_subtract;
     
     event::emit(BMTokenUpdated {
@@ -254,7 +257,7 @@ public fun use_potion(
     let owner = tx_context::sender(ctx);
     let potion_id = object::uid_to_address(&potion.id);
     
-    assert!(potion.quantity >= quantity_to_use, 0); // 에러: 포션 부족
+    assert!(potion.quantity >= quantity_to_use, E_INSUFFICIENT_POTION_QUANTITY);
     
     potion.quantity = potion.quantity - quantity_to_use;
     

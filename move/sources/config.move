@@ -31,6 +31,11 @@ fun init(ctx: &mut TxContext) {
     transfer::share_object(cfg);
 }
 
+#[test_only]
+public fun create_and_share_for_testing(ctx: &mut TxContext) {
+    init(ctx)
+}
+
 /// Admin-only: toggle permissionless mode
 public fun set_permissionless(cfg: &mut Config, value: bool, ctx: &mut TxContext) {
     assert!(tx_context::sender(ctx) == cfg.admin, E_NOT_ADMIN);
