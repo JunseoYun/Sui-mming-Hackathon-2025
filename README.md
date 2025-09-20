@@ -19,7 +19,7 @@ Meanwhile, Web2 gaming attracts billions of users, yet players face **opaque pro
 
 **(2) Minimal On-Chain Structure**
 
-    **On-chain modules** :
+On-chain modules :
 
 * blockmon.move: Defines core Blockmon logic
 * inventory.move: Manages player-owned assets
