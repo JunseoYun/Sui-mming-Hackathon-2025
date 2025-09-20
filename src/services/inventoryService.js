@@ -1,5 +1,13 @@
 import { TransactionBlock } from "@mysten/sui.js/transactions";
 
+/**
+ * WARNING: Do NOT call `inventory::transfer_*` from the frontend.
+ * These functions only mutate a stored `owner` field and DO NOT transfer
+ * actual Sui object ownership. Always use PTB `tx.transferObjects([...], recipient)`
+ * or on-chain `sui::transfer::public_transfer` instead. This API will be removed
+ * after migrating BM to `Coin<BM>`.
+ */
+
 export function createInventoryService({
   client,
   resolvePackageId,

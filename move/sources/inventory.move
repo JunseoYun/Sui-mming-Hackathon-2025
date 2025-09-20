@@ -333,11 +333,19 @@ public fun has_sufficient_potions(potion: &Potion, required_quantity: u64): bool
 }
 
 /// BM 토큰 전송 (소유권 변경)
+/// WARNING: 이 함수는 오직 `owner` 필드만 변경하며 실제 Sui 오브젝트 소유권을 이전하지 않습니다.
+/// - 트랜잭션에서 전송이 필요하면 PTB의 `tx.transferObjects([...], recipient)` 또는
+///   `sui::transfer::public_transfer`를 사용하세요.
+/// - 리팩토링(BM → Coin<BM>) 이후 제거 예정. 프런트엔드에서 호출 금지.
 public fun transfer_bm_token(bm_token: &mut BMToken, new_owner: address) {
     bm_token.owner = new_owner;
 }
 
 /// 포션 전송 (소유권 변경)
+/// WARNING: 이 함수는 오직 `owner` 필드만 변경하며 실제 Sui 오브젝트 소유권을 이전하지 않습니다.
+/// - 트랜잭션에서 전송이 필요하면 PTB의 `tx.transferObjects([...], recipient)` 또는
+///   `sui::transfer::public_transfer`를 사용하세요.
+/// - 리팩토링(BM → Coin<BM>) 이후 제거 예정. 프런트엔드에서 호출 금지.
 public fun transfer_potion(potion: &mut Potion, new_owner: address) {
     potion.owner = new_owner;
 }
