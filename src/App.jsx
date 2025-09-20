@@ -25,12 +25,20 @@ import {
   createNetworkConfig,
   SuiClientProvider,
   useSuiClientContext,
+  useSignAndExecuteTransaction,
   WalletProvider,
 } from "@mysten/dapp-kit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { isEnokiNetwork, registerEnokiWallets } from "@mysten/enoki";
 import { getFullnodeUrl } from "@mysten/sui/client";
 import FusionFeedback from "./components/FusionFeedback";
+import {
+  detectSigningStrategy,
+  createEnvKeypairFromEnv,
+  buildEnvKeyExecutor,
+  buildWalletExecutor,
+  getAddressFromKeypair,
+} from "./utils/signer";
 
 const pages = {
   home: { labelKey: "nav.home", component: Home, showInNav: true },
@@ -58,6 +66,7 @@ function formatLogTime(language, offsetMinutes = 0) {
 }
 
 const { networkConfig } = createNetworkConfig({
+  local: { url: import.meta.env.VITE_SUI_RPC_URL || "http://127.0.0.1:9000" },
   testnet: { url: getFullnodeUrl("testnet") },
   mainnet: { url: getFullnodeUrl("mainnet") },
 });
@@ -65,9 +74,10 @@ const { networkConfig } = createNetworkConfig({
 const queryClient = new QueryClient();
 
 function App() {
+  const defaultNetwork = import.meta.env.VITE_SUI_NETWORK || "testnet";
   return (
     <QueryClientProvider client={queryClient}>
-      <SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
+      <SuiClientProvider networks={networkConfig} defaultNetwork={defaultNetwork}>
         <RegisterEnokiWallets />
         <WalletProvider autoConnect>
           <GameApp />
@@ -181,6 +191,26 @@ function GameApp() {
   const [potions, setPotions] = useState(2);
   const [language, setLanguage] = useState("ko");
   const [fusionFeedback, setFusionFeedback] = useState(null);
+  const [signing, setSigning] = useState({ strategy: "wallet", address: null });
+
+  const { client, network } = useSuiClientContext();
+  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+
+  const executor = useMemo(() => {
+    const strategy = detectSigningStrategy();
+    if (strategy === "env-key") {
+      try {
+        const keypair = createEnvKeypairFromEnv();
+        const address = keypair ? getAddressFromKeypair(keypair) : null;
+        setSigning({ strategy, address });
+        return buildEnvKeyExecutor({ client, keypair });
+      } catch (e) {
+        console.error("[Signer] env-key init failed, falling back to wallet:", e);
+      }
+    }
+    setSigning({ strategy: "wallet", address: null });
+    return buildWalletExecutor(signAndExecute);
+  }, [client, signAndExecute]);
 
   const t = useMemo(() => {
     const translateFn = (key, params) => translate(language, key, params);
@@ -765,6 +795,7 @@ function GameApp() {
       potions,
       language,
       t,
+      signing,
     }),
     [
       player,
@@ -783,6 +814,7 @@ function GameApp() {
       potions,
       language,
       t,
+      signing,
     ]
   );
 
@@ -792,6 +824,7 @@ function GameApp() {
     performFusion,
     runPvpMatch,
     registerUser,
+    executor,
     setAdventureSelection,
     setPvpSelection,
     setLanguage,
