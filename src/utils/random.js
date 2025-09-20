@@ -3,31 +3,55 @@ const speciesCatalog = [
     id: "orca",
     name: "범고래",
     base: { hp: 120, str: 14, dex: 8, con: 13, int: 6, wis: 7, cha: 10 },
+    skill: {
+      name: "skill.orca.name",
+      description: "skill.orca.description",
+    },
   },
   {
     id: "plankton",
     name: "플랑크톤",
     base: { hp: 70, str: 6, dex: 14, con: 7, int: 12, wis: 11, cha: 9 },
+    skill: {
+      name: "skill.plankton.name",
+      description: "skill.plankton.description",
+    },
   },
   {
     id: "turtle",
     name: "거북이",
     base: { hp: 140, str: 11, dex: 6, con: 16, int: 8, wis: 12, cha: 6 },
+    skill: { 
+      name: "skill.turtle.name",
+      description: "skill.turtle.description"
+    },
   },
   {
     id: "kraken",
     name: "크라켄",
     base: { hp: 150, str: 17, dex: 9, con: 14, int: 9, wis: 8, cha: 7 },
+    skill: { 
+      name: "skill.kraken.name",
+      description: "skill.kraken.description"
+    },
   },
   {
     id: "leviathan",
     name: "레비아탄",
     base: { hp: 168, str: 18, dex: 11, con: 15, int: 10, wis: 10, cha: 9 },
+    skill: {
+      name: "skill.leviathan.name",
+      description: "skill.leviathan.description",
+    },
   },
   {
     id: "mermaid",
     name: "인어",
     base: { hp: 104, str: 10, dex: 13, con: 9, int: 13, wis: 14, cha: 16 },
+    skill: { 
+      name: "skill.mermaid.name",
+      description: "skill.mermaid.description"
+    },
   },
 ];
 
@@ -118,6 +142,7 @@ export function createBlockmonFromSeed(seed, options = {}) {
     hp,
     maxHp: hp,
     stats,
+    skill: species.skill,
     rank: rarity,
     temperament: species.habitat,
     origin: options.origin ?? "야생 탄생",
@@ -162,6 +187,7 @@ export function fuseBlockmons(parents, seed) {
     hp,
     maxHp: hp,
     stats,
+    skill: baseSpecies.skill,
     rank: rarity,
     temperament: "합성으로 각성한 유전자",
     origin: "합성 DNA",
@@ -170,85 +196,213 @@ export function fuseBlockmons(parents, seed) {
   };
 }
 
-export function rollBattleOutcome(player, opponent, seed) {
+export function rollBattleOutcome(player, opponent, seed, t) {
   const rng = lcg(seed);
   const initiativeScore =
     player.stats.dex - opponent.stats.dex + Math.floor(rng() * 6) - 3;
   const firstAttacker = initiativeScore >= 0 ? "player" : "opponent";
   const rounds = [];
 
-  let playerHp = player.hp;
-  let opponentHp = opponent.hp;
-
-  const attackPhase = (attacker, defender, defenderHp) => {
-    const accuracy = attacker.dex + attacker.int / 2 + Math.floor(rng() * 12);
-    const evasion = defender.dex + defender.wis / 2 + Math.floor(rng() * 10);
-    const hit = accuracy >= evasion - 2;
-    if (!hit) {
-      return { damage: 0, result: "miss", updatedHp: defenderHp };
-    }
-
-    const critChance = attacker.cha / 2 + Math.floor(rng() * 100);
-    const isCrit = critChance > 110;
-    const baseDamage = attacker.str + attacker.int / 3;
-    const variance = Math.floor(rng() * 10);
-    const totalDamage =
-      Math.max(4, Math.round(baseDamage + variance)) * (isCrit ? 2 : 1);
-    const mitigation = defender.con / 2;
-    const damage = Math.max(3, totalDamage - mitigation);
-    return {
-      damage,
-      result: isCrit ? "crit" : "hit",
-      updatedHp: Math.max(0, defenderHp - damage),
-    };
+  const battleState = {
+    player: {
+      hp: player.hp,
+      maxHp: player.hp,
+      ...player,
+      effects: { turtleShell: 0, planktonHealUsed: false, mermaidSkip: false, krakenMiss: false },
+    },
+    opponent: {
+      hp: opponent.hp,
+      maxHp: opponent.hp,
+      ...opponent,
+      effects: { turtleShell: 0, planktonHealUsed: false, mermaidSkip: false, krakenMiss: false },
+    },
+    rng,
+    rounds,
+    t,
   };
 
-  let attacker = firstAttacker;
-  while (playerHp > 0 && opponentHp > 0 && rounds.length < 8) {
-    if (attacker === "player") {
-      const phase = attackPhase(player.stats, opponent.stats, opponentHp);
-      opponentHp = phase.updatedHp;
-      rounds.push({
-        actor: player.species,
-        action:
-          phase.result === "miss"
-            ? "공격이 빗나갔습니다."
-            : phase.result === "crit"
-            ? "치명타 성공!"
-            : "공격 성공",
-        detail:
-          phase.result === "miss" ? "데미지 없음" : `${phase.damage} 피해`,
-        opponentHp,
-      });
-      attacker = "opponent";
-    } else {
-      const phase = attackPhase(opponent.stats, player.stats, playerHp);
-      playerHp = phase.updatedHp;
-      rounds.push({
-        actor: opponent.species,
-        action:
-          phase.result === "miss"
-            ? "공격이 빗나갔습니다."
-            : phase.result === "crit"
-            ? "치명타!"
-            : "공격",
-        detail:
-          phase.result === "miss" ? "데미지 없음" : `${phase.damage} 피해`,
-        opponentHp: playerHp,
-      });
-      attacker = "player";
+  let attacker = firstAttacker === 'player' ? battleState.player : battleState.opponent;
+  let defender = firstAttacker === 'player' ? battleState.opponent : battleState.player;
+
+  while (battleState.player.hp > 0 && battleState.opponent.hp > 0 && battleState.rounds.length < 20) {
+    applySkills(attacker, defender, battleState);
+
+    if (defender.hp <= 0) {
+        break;
     }
+
+    if (attacker.effects.mermaidSkip) {
+        attacker.effects.mermaidSkip = false;
+        battleState.rounds.push({
+            actor: attacker.species,
+            action: `${attacker.species}의 ${t(attacker.skill.name)} 효과로 행동을 건너뜁니다.`,
+            detail: "",
+            playerHp: battleState.player.hp,
+            opponentHp: battleState.opponent.hp,
+        });
+        [attacker, defender] = [defender, attacker];
+        continue;
+    }
+
+    const phase = attackPhase(attacker, defender, battleState.rng, t);
+    
+    // Update hp in battleState
+    if (attacker === battleState.player) {
+        battleState.opponent.hp = defender.hp;
+    } else {
+        battleState.player.hp = defender.hp;
+    }
+
+    if (phase.skillUsed) {
+        battleState.rounds.push({
+            actor: attacker.species,
+            action: phase.skillUsed,
+            detail: `${phase.damage} 피해`,
+            playerHp: battleState.player.hp,
+            opponentHp: battleState.opponent.hp,
+        });
+    } else {
+        battleState.rounds.push({
+            actor: attacker.species,
+            action: phase.result === "miss" ? "공격이 빗나갔습니다." : phase.result === "crit" ? "치명타!" : "공격",
+            detail: phase.result === "miss" ? "데미지 없음" : `${phase.damage} 피해`,
+            playerHp: battleState.player.hp,
+            opponentHp: battleState.opponent.hp,
+        });
+    }
+
+    if (defender.hp <= 0) {
+        break;
+    }
+
+    [attacker, defender] = [defender, attacker];
   }
 
-  const playerWon = opponentHp === 0 || opponentHp < playerHp;
+  const playerWon = battleState.opponent.hp <= 0;
   const outcome = playerWon ? "win" : "defeat";
 
   return {
-    rounds,
+    rounds: battleState.rounds,
     outcome,
-    remainingHp: Math.max(playerHp, 0),
-    opponentRemainingHp: Math.max(opponentHp, 0),
+    remainingHp: Math.max(battleState.player.hp, 0),
+    opponentRemainingHp: Math.max(battleState.opponent.hp, 0),
   };
+}
+
+function applySkills(attacker, defender, battleState) {
+    const { t } = battleState;
+    // Leviathan Skill
+    if (attacker.skill.name === "skill.leviathan.name" && battleState.rng() < 0.05) {
+        if (defender.effects.turtleShell > 0) {
+            battleState.rounds.push({
+                actor: attacker.species,
+                action: `${attacker.species}의 ${t(attacker.skill.name)} 발동!`,
+                detail: `${defender.species}는 ${t("skill.turtle.name")} 효과로 보호받고 있습니다!`,
+                playerHp: battleState.player.hp,
+                opponentHp: battleState.opponent.hp,
+            });
+        } else {
+            defender.hp = 0;
+            const playerHp = attacker === battleState.player ? battleState.player.hp : defender.hp;
+            const opponentHp = attacker === battleState.player ? defender.hp : battleState.player.hp;
+            battleState.rounds.push({
+                actor: attacker.species,
+                action: `${attacker.species}의 ${t(attacker.skill.name)} 발동!`,
+                detail: "상대를 즉사시켰습니다!",
+                playerHp,
+                opponentHp,
+            });
+        }
+        return;
+    }
+
+    // Turtle Skill
+    if (attacker.skill.name === "skill.turtle.name" && attacker.effects.turtleShell === 0 && battleState.rng() < 0.25) {
+        attacker.effects.turtleShell = 2;
+        battleState.rounds.push({
+            actor: attacker.species,
+            action: `${attacker.species}가 ${t(attacker.skill.name)}을 사용!`,
+            detail: "2턴 동안 무적이 됩니다.",
+            playerHp: battleState.player.hp,
+            opponentHp: battleState.opponent.hp,
+        });
+    }
+
+    // Mermaid Skill
+    if (attacker.skill.name === "skill.mermaid.name" && battleState.rng() < 0.3) {
+        defender.effects.mermaidSkip = true;
+        battleState.rounds.push({
+            actor: attacker.species,
+            action: `${attacker.species}가 ${t(attacker.skill.name)}을 사용!`,
+            detail: "상대의 다음 턴을 건너뜁니다.",
+            playerHp: battleState.player.hp,
+            opponentHp: battleState.opponent.hp,
+        });
+    }
+
+    // Kraken Skill
+    if (attacker.skill.name === "skill.kraken.name" && battleState.rng() < 0.4) {
+        defender.effects.krakenMiss = true;
+        battleState.rounds.push({
+            actor: attacker.species,
+            action: `${attacker.species}가 ${t(attacker.skill.name)}을 사용!`,
+            detail: "상대의 다음 공격이 빗나갑니다.",
+            playerHp: battleState.player.hp,
+            opponentHp: battleState.opponent.hp,
+        });
+    }
+
+    // Plankton Skill
+    if (attacker.skill.name === "skill.plankton.name" && !attacker.effects.planktonHealUsed && attacker.hp / attacker.maxHp < 0.2) {
+        attacker.hp = attacker.maxHp * 0.5;
+        attacker.effects.planktonHealUsed = true;
+        const playerHp = attacker === battleState.player ? attacker.hp : battleState.opponent.hp;
+        const opponentHp = attacker === battleState.player ? battleState.opponent.hp : attacker.hp;
+        battleState.rounds.push({
+            actor: attacker.species,
+            action: `${attacker.species}의 ${t(attacker.skill.name)} 발동!`,
+            detail: `체력을 ${attacker.hp.toFixed(0)}까지 회복!`,
+            playerHp,
+            opponentHp,
+        });
+    }
+}
+
+function attackPhase(attacker, defender, rng, t) {
+    if (defender.effects.turtleShell > 0) {
+        defender.effects.turtleShell--;
+        return { damage: 0, result: "immune", skillUsed: `${defender.species}의 ${t(defender.skill.name)} 효과로 공격이 무효화되었습니다.` };
+    }
+
+    if (defender.effects.krakenMiss) {
+        defender.effects.krakenMiss = false;
+        return { damage: 0, result: "miss", skillUsed: `${defender.species}의 ${t(defender.skill.name)} 효과로 공격이 빗나갔습니다.` };
+    }
+
+    const accuracy = attacker.stats.dex + attacker.stats.int / 2 + Math.floor(rng() * 12);
+    const evasion = defender.stats.dex + defender.stats.wis / 2 + Math.floor(rng() * 10);
+    const hit = accuracy >= evasion - 2;
+    if (!hit) {
+        return { damage: 0, result: "miss" };
+    }
+
+    const critChance = attacker.stats.cha / 2 + Math.floor(rng() * 100);
+    const isCrit = critChance > 110;
+    const baseDamage = attacker.stats.str + attacker.stats.int / 3;
+    const variance = Math.floor(rng() * 10);
+    let totalDamage = Math.max(4, Math.round(baseDamage + variance)) * (isCrit ? 2 : 1);
+    let skillUsed = null;
+
+    if (attacker.skill.name === "skill.orca.name" && rng() < 0.5) {
+        totalDamage *= 2;
+        skillUsed = `${attacker.species}의 ${t(attacker.skill.name)}! 데미지 2배!`;
+    }
+
+    const mitigation = defender.stats.con / 2;
+    const damage = Math.max(3, Math.round(totalDamage - mitigation));
+    defender.hp = Math.max(0, defender.hp - damage);
+
+    return { damage, result: isCrit ? "crit" : "hit", skillUsed };
 }
 
 export const catalog = speciesCatalog;

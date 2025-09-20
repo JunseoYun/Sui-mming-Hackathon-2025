@@ -91,7 +91,6 @@ export default function Home({ gameState, actions }) {
                 selectable
                 isSelected={selectedTeam.includes(blockmon.id)}
                 onSelect={handleToggleMember}
-                language={language}
                 t={t}
               />
             ))}
