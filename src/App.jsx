@@ -68,6 +68,7 @@ import {
   subtractBMTokens as onchainSubtractBMTokens,
   getTotalBMTokenBalance,
 } from "./utils/inventory";
+import { useTea, TeaMsg, initialModel } from "./state/tea";
 
 const pages = {
   home: { labelKey: "nav.home", component: Home, showInNav: true },
@@ -213,12 +214,8 @@ function GameApp() {
   const [battleHistory, setBattleHistory] = useState([]);
   const [fusionHistory, setFusionHistory] = useState([]);
   const [pvpHistory, setPvpHistory] = useState([]);
-  const [currentPage, setCurrentPage] = useState("home");
-  const [systemMessage, setSystemMessage] = useState(null);
-  const [adventureSelection, setAdventureSelection] = useState([]);
-  const [pvpSelection, setPvpSelection] = useState([]);
+  // moved to TEA: adventureSelection, pvpSelection
   const [potions, setPotions] = useState(0);
-  const [language, setLanguage] = useState("ko");
   const [fusionFeedback, setFusionFeedback] = useState(null);
   const [signing, setSigning] = useState({ strategy: "wallet", address: null });
   const [starterAttempted, setStarterAttempted] = useState(false);
@@ -232,7 +229,33 @@ function GameApp() {
       return Array.isArray(arr) ? arr : [];
     } catch (_) { return []; }
   });
-  const [showChainLog, setShowChainLog] = useState(false);
+  const [ui, dispatch] = useTea(initialModel);
+  const language = ui.language;
+  const currentPage = ui.currentPage;
+  const systemMessage = ui.systemMessage;
+  const showChainLog = ui.showChainLog;
+  const adventureSelection = ui.adventureSelection;
+  const pvpSelection = ui.pvpSelection;
+  const setLanguage = (lang) => dispatch(TeaMsg.SetLanguage(lang));
+  const setCurrentPage = (page) => dispatch(TeaMsg.Navigate(page));
+  const setSystemMessage = (message) => dispatch(TeaMsg.SetSystemMessage(message));
+  const setShowChainLog = (value) => dispatch(TeaMsg.SetShowChainLog(value));
+  const setAdventureSelection = (selectionOrFn) => {
+    if (typeof selectionOrFn === 'function') {
+      const next = selectionOrFn(ui.adventureSelection);
+      dispatch(TeaMsg.SetAdventureSelection(next));
+    } else {
+      dispatch(TeaMsg.SetAdventureSelection(selectionOrFn));
+    }
+  };
+  const setPvpSelection = (selectionOrFn) => {
+    if (typeof selectionOrFn === 'function') {
+      const next = selectionOrFn(ui.pvpSelection);
+      dispatch(TeaMsg.SetPvpSelection(next));
+    } else {
+      dispatch(TeaMsg.SetPvpSelection(selectionOrFn));
+    }
+  };
 
   const { client, network } = useSuiClientContext();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
