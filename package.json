@@ -10,6 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@mysten/dapp-kit": "^0.18.0",
+    "@mysten/enoki": "^0.12.0",
+    "@mysten/sui.js": "^0.54.1",
     "@react-oauth/google": "^0.12.2",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"

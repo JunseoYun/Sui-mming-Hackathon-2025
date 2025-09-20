@@ -179,6 +179,7 @@ const translations = {
     "signup.nicknameLabel": "수호자 닉네임",
     "signup.nicknamePlaceholder": "예: 심해탐험가",
     "signup.error.nickname": "닉네임을 입력해주세요.",
+    "signup.error.walletRequired": "가입 전에 지갑을 연결해주세요.",
     "signup.button": "DNA 생성하고 입장",
     "signup.infoTitle": "시작 안내",
     "signup.bullet.seed": "✅ 랜덤 u64 시드 기반 고유 DNA 발급",
@@ -187,6 +188,8 @@ const translations = {
       "✅ 모험 시작 시 토큰 1개 소모, 배틀 승리 시 추가 보상",
     "signup.bullet.fusion":
       "✅ 동일 종족 2마리 합성 → 새로운 DNA + 능력치 강화",
+    "signup.wallet.connect": "지갑 연결하기",
+    "signup.wallet.connected": "연결된 지갑: {{address}}",
   },
   en: {
     "app.brand": "Blockmon Battle Prototype",
@@ -368,6 +371,7 @@ const translations = {
     "signup.nicknameLabel": "Guardian nickname",
     "signup.nicknamePlaceholder": "e.g. Abyss Explorer",
     "signup.error.nickname": "Please enter a nickname.",
+    "signup.error.walletRequired": "Please connect your wallet before signing up.",
     "signup.button": "Generate DNA & Enter",
     "signup.infoTitle": "Getting Started",
     "signup.bullet.seed": "✅ Unique DNA via random u64 seed",
@@ -375,6 +379,8 @@ const translations = {
     "signup.bullet.adventure":
       "✅ Adventures cost 1 BM, battle wins grant extra rewards",
     "signup.bullet.fusion": "✅ Fuse identical species to unlock stronger DNA",
+    "signup.wallet.connect": "Connect wallet",
+    "signup.wallet.connected": "Connected wallet: {{address}}",
   },
 };
 
