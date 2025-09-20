@@ -81,6 +81,15 @@ export function extractCreatedByType(executionResult, fullType) {
   return created?.objectId || null;
 }
 
+// Helper to extract ALL created object ids by type (ordered as in tx)
+export function extractCreatedManyByType(executionResult, fullType) {
+  const changes = executionResult?.objectChanges;
+  if (!Array.isArray(changes)) return [];
+  return changes
+    .filter((c) => c.type === "created" && c.objectType === fullType)
+    .map((c) => c.objectId);
+}
+
 // Build: create BlockMon and transfer to sender
 export function buildCreateBlockMonTx({
   packageId,
@@ -119,6 +128,36 @@ export function buildCreateBlockMonTx({
   });
 
   tx.transferObjects([created], tx.pure.address(sender));
+  return tx;
+}
+
+// Build: create MANY BlockMon and transfer to sender in a single tx
+export function buildCreateManyBlockMonTx({ packageId, sender, entries }) {
+  const pkg = resolvePackageId(packageId);
+  if (!sender) throw new Error("sender address is required to transfer the newly created BlockMon");
+  const tx = new TransactionBlock();
+  const createdObjects = [];
+  for (const e of entries || []) {
+    if (!e) continue;
+    const created = tx.moveCall({
+      target: fn(pkg, "createBlockMon"),
+      arguments: [
+        tx.pure.string(e.monId),
+        tx.pure.string(e.name),
+        tx.pure.u64(e.hp),
+        tx.pure.u64(e.str),
+        tx.pure.u64(e.dex),
+        tx.pure.u64(e.con),
+        tx.pure.u64(e.int),
+        tx.pure.u64(e.wis),
+        tx.pure.u64(e.cha),
+        tx.pure.string(e.skillName),
+        tx.pure.string(e.skillDescription),
+      ],
+    });
+    createdObjects.push(created);
+    tx.transferObjects([created], tx.pure.address(sender));
+  }
   return tx;
 }
 
@@ -277,6 +316,13 @@ export async function createBlockMon({
     skillName,
     skillDescription,
   });
+  const res = await executeTransaction({ tx, executor, client, signAndExecute });
+  return res;
+}
+
+// Convenience: create MANY BlockMon in one tx
+export async function createManyBlockMon({ executor, packageId, sender, entries, client, signAndExecute }) {
+  const tx = buildCreateManyBlockMonTx({ packageId, sender, entries });
   const res = await executeTransaction({ tx, executor, client, signAndExecute });
   return res;
 }

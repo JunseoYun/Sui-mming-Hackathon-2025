@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import Adventure from "./pages/Adventure";
 import Fusion from "./pages/Fusion";
 import Home from "./pages/Home";
@@ -44,7 +44,9 @@ import {
 import {
   listOwnedBlockMons,
   createBlockMon as onchainCreateBlockMon,
+  createManyBlockMon as onchainCreateManyBlockMon,
   extractCreatedByType,
+  extractCreatedManyByType,
   getBlockMon,
   burn as onchainBurn,
   burnMany as onchainBurnMany,
@@ -220,6 +222,15 @@ function GameApp() {
   const [signing, setSigning] = useState({ strategy: "wallet", address: null });
   const [starterAttempted, setStarterAttempted] = useState(false);
   const [purchasingPotion, setPurchasingPotion] = useState(false);
+  const [flushingPending, setFlushingPending] = useState(false);
+  const CHAIN_LOG_KEY = 'blockmon_chain_log';
+  const [chainLog, setChainLog] = useState(() => {
+    try {
+      const raw = localStorage.getItem(CHAIN_LOG_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (_) { return []; }
+  });
 
   const { client, network } = useSuiClientContext();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
@@ -246,6 +257,171 @@ function GameApp() {
     translateFn.language = language;
     return translateFn;
   }, [language]);
+
+  // ----- Chain log helpers -----
+  const appendChainLog = (entry) => {
+    try {
+      const withTs = { time: new Date().toISOString(), ...entry };
+      setChainLog((prev) => {
+        const next = [...prev, withTs];
+        const capped = next.slice(Math.max(0, next.length - 200));
+        try { localStorage.setItem(CHAIN_LOG_KEY, JSON.stringify(capped)); } catch (_) {}
+        return capped;
+      });
+      // 개발 편의 콘솔
+      const label = `[Chain] ${entry.action || 'action'} ${entry.status || ''}`;
+      if (entry.status === 'error') console.error(label, entry);
+      else console.log(label, entry);
+    } catch (_) {}
+  };
+  const logTxStart = (action, meta) => appendChainLog({ level: 'info', action, status: 'start', ...meta });
+  const logTxSuccess = (action, res, meta) => appendChainLog({ level: 'info', action, status: 'success', digest: res?.digest || res?.effects?.transactionDigest || res?.effectsDigest, ...meta });
+  const logTxError = (action, err, meta) => appendChainLog({ level: 'error', action, status: 'error', error: String(err?.message || err), ...meta });
+
+  // ----- Global serialization for on-chain tx to avoid gas coin version races -----
+  const txQueueRef = useRef(Promise.resolve());
+  const runSerialized = (name, fn) => {
+    const next = txQueueRef.current
+      .catch(() => {})
+      .then(async () => {
+        appendChainLog({ action: 'queue', status: 'start', name });
+        try {
+          const res = await fn();
+          appendChainLog({ action: 'queue', status: 'success', name });
+          return res;
+        } catch (e) {
+          appendChainLog({ action: 'queue', status: 'error', name, error: String(e?.message || e) });
+          throw e;
+        }
+      });
+    txQueueRef.current = next;
+    return next;
+  };
+
+  // Retry helpers (exponential backoff) for transient version/lock errors
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const isRetriableChainError = (err) => {
+    const msg = String(err?.message || err || '');
+    return /already locked|not available for consumption|rejected as invalid/i.test(msg);
+  };
+  const withRetry = async (actionName, fn, { attempts = 5, baseDelayMs = 400 } = {}) => {
+    let lastErr;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        if (i > 0) appendChainLog({ action: actionName, status: 'retry', attempt: i });
+        const res = await fn();
+        if (i > 0) appendChainLog({ action: actionName, status: 'retry-success', attempt: i });
+        await sleep(150);
+        return res;
+      } catch (e) {
+        lastErr = e;
+        if (!isRetriableChainError(e) || i === attempts - 1) throw e;
+        const delay = baseDelayMs * Math.pow(2, i) + Math.floor(Math.random() * 150);
+        await sleep(delay);
+      }
+    }
+    throw lastErr;
+  };
+  const queueAndRetry = (name, fn, opts) => runSerialized(name, () => withRetry(name, fn, opts));
+
+  // ----- Pending capture mint queue (local persistence) -----
+  const PENDING_MINT_KEY = 'blockmon_pending_capture_mints';
+  const loadPendingMints = () => {
+    try {
+      const raw = localStorage.getItem(PENDING_MINT_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (_) {
+      return [];
+    }
+  };
+  const savePendingMints = (arr) => {
+    try {
+      localStorage.setItem(PENDING_MINT_KEY, JSON.stringify(arr || []));
+    } catch (_) {}
+  };
+  const entriesEqual = (a, b) => {
+    return a && b && a.monId === b.monId && a.name === b.name && a.hp === b.hp && a.str === b.str && a.dex === b.dex && a.con === b.con && a.int === b.int && a.wis === b.wis && a.cha === b.cha && a.skillName === b.skillName && a.skillDescription === b.skillDescription;
+  };
+  const removeEntriesFromQueue = (toRemove) => {
+    if (!toRemove?.length) return;
+    const q = loadPendingMints();
+    const remain = [];
+    for (const qItem of q) {
+      const idx = toRemove.findIndex((e) => entriesEqual(e, qItem));
+      if (idx === -1) remain.push(qItem);
+      else toRemove.splice(idx, 1);
+    }
+    savePendingMints(remain);
+  };
+
+  // Flush pending queue on owner ready
+  useEffect(() => {
+    const owner = signing.address ?? currentAccount?.address ?? null;
+    if (!owner) return;
+    if (flushingPending) return;
+    let cancelled = false;
+    (async () => {
+      setFlushingPending(true);
+      try {
+        const pkg = resolvePackageId();
+        const q = loadPendingMints();
+        if (!q.length) return;
+        const BATCH_SIZE = 5;
+        const newMapped = [];
+        for (let i = 0; i < q.length; i += BATCH_SIZE) {
+          if (cancelled) break;
+          const batch = q.slice(i, i + BATCH_SIZE);
+          try {
+            logTxStart('pending.flush.batch', { size: batch.length, offset: i });
+            const res = await queueAndRetry('pending.flush.batch', async () => onchainCreateManyBlockMon({ executor, packageId: pkg, sender: owner, entries: batch, client, signAndExecute }), { attempts: 5, baseDelayMs: 600 });
+            try {
+              const digest = res?.digest || res?.effects?.transactionDigest || res?.effectsDigest;
+              if (digest && typeof client.waitForTransactionBlock === 'function') {
+                await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true } });
+              }
+            } catch (_) {}
+            const fullType = `${pkg}::blockmon::BlockMon`;
+            const ids = extractCreatedManyByType(res, fullType);
+            if (ids?.length) {
+              const fetched = await Promise.all(ids.map(async (id) => { try { const obj = await getBlockMon(client, id); return mapOnchainToLocal({ data: obj?.data ?? obj }); } catch (_) { return null; } }));
+              newMapped.push(...fetched.filter(Boolean));
+            }
+            removeEntriesFromQueue([...batch]);
+            logTxSuccess('pending.flush.batch', res, { size: batch.length, created: (ids?.length || 0), offset: i });
+          } catch (err) {
+            logTxError('pending.flush.batch', err, { size: batch.length, offset: i, fallback: true });
+            // fallback sequential
+            for (const entry of batch) {
+              try {
+                logTxStart('pending.flush.mint', { monId: entry.monId, name: entry.name });
+                const res = await queueAndRetry('pending.flush.single', async () => onchainCreateBlockMon({ executor, packageId: pkg, sender: owner, ...entry, client, signAndExecute }), { attempts: 6, baseDelayMs: 600 });
+                const fullType = `${pkg}::blockmon::BlockMon`;
+                const objectId = extractCreatedByType(res, fullType);
+                if (objectId) {
+                  try { const fetched = await getBlockMon(client, objectId); const mapped = mapOnchainToLocal({ data: fetched?.data ?? fetched }); if (mapped) newMapped.push(mapped); } catch (_) {}
+                  removeEntriesFromQueue([entry]);
+                }
+                logTxSuccess('pending.flush.mint', res, { monId: entry.monId, name: entry.name, objectId });
+              } catch (e2) {
+                logTxError('pending.flush.mint', e2, { monId: entry.monId, name: entry.name });
+              }
+            }
+          }
+        }
+        if (newMapped.length > 0 && !cancelled) {
+          setBlockmons((prev) => [...prev, ...newMapped]);
+        }
+      } catch (e) {
+        console.error('[Onchain] flush pending captured failed', e);
+        logTxError('pending.flush', e);
+      } finally {
+        if (!cancelled) setFlushingPending(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [client, signing.address, currentAccount?.address, executor]);
 
   // 체인 BlockMon -> 로컬 모델 매핑
   const mapOnchainToLocal = (entry) => {
@@ -827,29 +1003,6 @@ function GameApp() {
     }
 
     setTokens((prev) => prev - 1 + tokensEarned);
-    // 온체인 BM 토큰 반영 (비동기): 모험 시작 1 소모, 보상 tokensEarned 추가
-    const ownerForTokens = signing.address ?? currentAccount?.address ?? null;
-    if (ownerForTokens) {
-      (async () => {
-        try {
-          const pkg = resolvePackageId();
-          let bmTokenId = null;
-          const resBM = await listOwnedBMTokens(client, ownerForTokens, pkg, null, 50);
-          const firstBM = (resBM?.data ?? [])[0];
-          bmTokenId = firstBM?.data?.objectId ?? firstBM?.objectId ?? null;
-          if (bmTokenId) {
-            if (tokensEarned > 0) {
-              await onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount: tokensEarned, client, signAndExecute });
-            }
-            await onchainSubtractBMTokens({ executor, packageId: pkg, bmTokenId, amount: 1, client, signAndExecute });
-          }
-          const bmTotal = await getTotalBMTokenBalance(client, ownerForTokens, pkg);
-          if (Number.isFinite(bmTotal)) setTokens(bmTotal);
-        } catch (e) {
-          console.error('[Onchain] reflect BM after adventure failed', e);
-        }
-      })();
-    }
     setAdventure(adventureState);
     setBattle(battleRecords[battleRecords.length - 1] ?? null);
     setBattleHistory((prev) => [...prev, ...battleRecords]);
@@ -862,97 +1015,160 @@ function GameApp() {
       },
     });
     setCurrentPage('adventure');
-    
-    // 온체인에 포획된 블록몬 민트 (비동기 실행)
+
+    // 온체인 정산 + 포획 민트 순차 실행 (비동기)
     const owner = signing.address ?? currentAccount?.address ?? null;
-    if (owner && capturedMonsters.length > 0) {
+    if (owner) {
       (async () => {
         try {
           const pkg = resolvePackageId();
-          for (const captured of capturedMonsters) {
-            const species = speciesCatalog.find((s) => s.name === captured.species);
-            const monId = species?.id ?? captured.species;
-            const res = await onchainCreateBlockMon({
-              executor,
-              packageId: pkg,
-              sender: owner,
-              monId,
-              name: captured.name,
-              hp: Number(captured.maxHp ?? captured.hp ?? 0),
-              str: Number(captured.stats?.str ?? 0),
-              dex: Number(captured.stats?.dex ?? 0),
-              con: Number(captured.stats?.con ?? 0),
-              int: Number(captured.stats?.int ?? 0),
-              wis: Number(captured.stats?.wis ?? 0),
-              cha: Number(captured.stats?.cha ?? 0),
-              skillName: String(captured.skill?.name ?? ''),
-              skillDescription: String(captured.skill?.description ?? ''),
-              client,
-              signAndExecute,
-            });
-            const fullType = `${pkg}::blockmon::BlockMon`;
-            const objectId = extractCreatedByType(res, fullType);
-            if (objectId) {
+          // 1) BM 정산 + 포션 사용을 단일 트랜잭션으로 처리하여 락 충돌 방지
+          try {
+            let bmTokenId = null;
+            try {
+              const resBM = await listOwnedBMTokens(client, owner, pkg, null, 50);
+              const firstBM = (resBM?.data ?? [])[0];
+              bmTokenId = firstBM?.data?.objectId ?? firstBM?.objectId ?? null;
+            } catch (e) {
+              console.warn('[Onchain] listOwnedBMTokens failed', e);
+            }
+
+            let potionId = null;
+            if (potionsUsed > 0) {
               try {
-                const fetched = await getBlockMon(client, objectId);
-                const mapped = mapOnchainToLocal({ data: fetched?.data ?? fetched });
-                if (mapped) {
-                  setBlockmons((prev) => {
-                    const withoutLocal = prev.filter((m) => m !== captured);
-                    return [...withoutLocal, mapped];
-                  });
-                }
+                const res = await listOwnedPotions(client, owner, pkg, null, 50);
+                const hpEntry = (res?.data ?? []).find((item) => {
+                  const fields = item?.data?.content?.fields ?? item?.content?.fields;
+                  return fields?.potion_type === 'HP';
+                });
+                potionId = hpEntry?.data?.objectId ?? hpEntry?.objectId ?? null;
               } catch (e) {
-                setBlockmons((prev) => [...prev, { ...captured, id: objectId, onchain: true }]);
+                console.warn('[Onchain] listOwnedPotions failed', e);
               }
+            }
+
+            if (bmTokenId || (potionsUsed > 0 && potionId)) {
+              logTxStart('adventure.settle', { bmTokenId, potionsUsed, tokensEarned });
+              const tx = new TransactionBlock();
+              if (bmTokenId) {
+                if (tokensEarned > 0) {
+                  tx.moveCall({ target: `${pkg}::inventory::add_bm_tokens`, arguments: [tx.object(bmTokenId), tx.pure.u64(tokensEarned)] });
+                }
+                tx.moveCall({ target: `${pkg}::inventory::subtract_bm_tokens`, arguments: [tx.object(bmTokenId), tx.pure.u64(1)] });
+              }
+              if (potionsUsed > 0 && potionId) {
+                tx.moveCall({ target: `${pkg}::inventory::use_potion`, arguments: [tx.object(potionId), tx.pure.u64(potionsUsed)] });
+              }
+              try {
+              const res = await queueAndRetry('adventure.settle', async () => executor(tx), { attempts: 4, baseDelayMs: 500 });
+                const digest = res?.digest || res?.effects?.transactionDigest || res?.effectsDigest;
+                if (digest && typeof client.waitForTransactionBlock === 'function') {
+                  await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true } });
+                }
+                logTxSuccess('adventure.settle', res, { bmTokenId, potionsUsed, tokensEarned });
+              } catch (e) {
+                console.error('[Onchain] combined reflect failed', e);
+                logTxError('adventure.settle', e, { bmTokenId, potionsUsed, tokensEarned });
+              }
+            }
+
+            // 체인 기준 동기화
+            try {
+              const bmTotal = await getTotalBMTokenBalance(client, owner, pkg);
+              if (Number.isFinite(bmTotal)) setTokens(bmTotal);
+            } catch (e) {}
+            try {
+              const total = await getTotalPotionCountByType(client, owner, pkg, 'HP');
+              if (Number.isFinite(total)) setPotions(total);
+            } catch (e) {}
+          } catch (e) {
+            console.error('[Onchain] reflect inventory after adventure failed', e);
+          }
+
+          // 2) 포획 블록몬 배치 민트 (인벤토리 정산 후 실행하여 가스 락 충돌 회피)
+          if (capturedMonsters.length > 0) {
+            try {
+              // 청크 배치 크기
+              const BATCH_SIZE = 10;
+              const toRemoveRefs = new Set(capturedMonsters);
+              const newMapped = [];
+              const allEntries = capturedMonsters.map((captured) => {
+                const species = speciesCatalog.find((s) => s.name === captured.species);
+                const monId = species?.id ?? captured.species;
+                return {
+                  monId,
+                  name: captured.name,
+                  hp: Number(captured.maxHp ?? captured.hp ?? 0),
+                  str: Number(captured.stats?.str ?? 0),
+                  dex: Number(captured.stats?.dex ?? 0),
+                  con: Number(captured.stats?.con ?? 0),
+                  int: Number(captured.stats?.int ?? 0),
+                  wis: Number(captured.stats?.wis ?? 0),
+                  cha: Number(captured.stats?.cha ?? 0),
+                  skillName: String(captured.skill?.name ?? ''),
+                  skillDescription: String(captured.skill?.description ?? ''),
+                };
+              });
+
+              // 실패 대비를 위해 전체를 큐에 저장해두고, 성공 시 제거
+              try { savePendingMints([ ...loadPendingMints(), ...allEntries ]); } catch (_) {}
+
+              for (let i = 0; i < allEntries.length; i += BATCH_SIZE) {
+                const batch = allEntries.slice(i, i + BATCH_SIZE);
+                try {
+                  logTxStart('capture.batchMint', { size: batch.length, offset: i });
+                  const res = await queueAndRetry('capture.batch', async () => onchainCreateManyBlockMon({ executor, packageId: pkg, sender: owner, entries: batch, client, signAndExecute }), { attempts: 4, baseDelayMs: 700 });
+                  try {
+                    const digest = res?.digest || res?.effects?.transactionDigest || res?.effectsDigest;
+                    if (digest && typeof client.waitForTransactionBlock === 'function') {
+                      await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true } });
+                    }
+                  } catch (_) {}
+                  const fullType = `${pkg}::blockmon::BlockMon`;
+                  const ids = extractCreatedManyByType(res, fullType);
+                  if (ids?.length) {
+                    const fetched = await Promise.all(ids.map(async (id) => {
+                      try { const obj = await getBlockMon(client, id); return mapOnchainToLocal({ data: obj?.data ?? obj }); } catch (_) { return null; }
+                    }));
+                    newMapped.push(...fetched.filter(Boolean));
+                  }
+                  logTxSuccess('capture.batchMint', res, { size: batch.length, created: (ids?.length || 0), offset: i });
+                } catch (err) {
+                  logTxError('capture.batchMint', err, { size: batch.length, offset: i, fallback: true });
+                  for (const entry of batch) {
+                    try {
+                      logTxStart('capture.mint', { monId: entry.monId, name: entry.name });
+                      const res = await queueAndRetry('capture.single', async () => onchainCreateBlockMon({ executor, packageId: pkg, sender: owner, ...entry, client, signAndExecute }), { attempts: 6, baseDelayMs: 600 });
+                      const fullType = `${pkg}::blockmon::BlockMon`;
+                      const objectId = extractCreatedByType(res, fullType);
+                      if (objectId) {
+                        try { const fetched = await getBlockMon(client, objectId); const mapped = mapOnchainToLocal({ data: fetched?.data ?? fetched }); if (mapped) newMapped.push(mapped); } catch (_) {}
+                        removeEntriesFromQueue([entry]);
+                      }
+                      logTxSuccess('capture.mint', res, { monId: entry.monId, name: entry.name, objectId });
+                    } catch (e2) {
+                      logTxError('capture.mint', e2, { monId: entry.monId, name: entry.name });
+                    }
+                  }
+                }
+              }
+
+              if (newMapped.length > 0) {
+                setBlockmons((prev) => {
+                  const withoutLocal = prev.filter((m) => !toRemoveRefs.has(m));
+                  return [...withoutLocal, ...newMapped];
+                });
+              }
+            } catch (e) {
+              console.error('[Onchain] mint captured failed', e);
             }
           }
         } catch (e) {
-          console.error('[Onchain] mint captured failed', e);
+          console.error('[Onchain] post-adventure chain ops failed', e);
         }
       })();
     }
-    
-    // 온체인 포션 사용 반영 (비동기 실행)
-    if (owner && potionsUsed > 0) {
-      (async () => {
-        try {
-          const pkg = resolvePackageId();
-          // HP 포션 객체 찾기
-          let potionId = null;
-          try {
-            const res = await listOwnedPotions(client, owner, pkg, null, 50);
-            const hpEntry = (res?.data ?? []).find((item) => {
-              const fields = item?.data?.content?.fields ?? item?.content?.fields;
-              return fields?.potion_type === 'HP';
-            });
-            potionId = hpEntry?.data?.objectId ?? hpEntry?.objectId ?? null;
-          } catch (e) {
-            console.warn('[Onchain] listOwnedPotions for use failed', e);
-          }
-          if (potionId) {
-            await onchainUsePotion({
-              executor,
-              packageId: pkg,
-              potionId,
-              quantity: potionsUsed,
-              client,
-              signAndExecute,
-            });
-          }
-          // 체인 기준으로 동기화
-          try {
-            const total = await getTotalPotionCountByType(client, owner, pkg, 'HP');
-            if (Number.isFinite(total)) setPotions(total);
-          } catch (e) {
-            console.warn('[Onchain] refresh potions after use failed', e);
-          }
-        } catch (e) {
-          console.error('[Onchain] reflect potions used failed', e);
-        }
-      })();
-    }
-    
+
     return { success: true };
   };
 
@@ -1094,14 +1310,16 @@ function GameApp() {
       (async () => {
         try {
           const pkg = resolvePackageId();
-          for (const p of parents) {
-            if (p.id && /^0x[0-9a-fA-F]+$/.test(p.id)) {
-              await onchainBurn({ executor, packageId: pkg, blockmonId: p.id, client, signAndExecute });
+          // 부모 소각을 하나의 트랜잭션으로 직렬화 실행 (gas version 충돌 방지)
+          await queueAndRetry('fusion.burnMany', async () => {
+            const ids = parents.filter((p) => p.id && /^0x[0-9a-fA-F]+$/.test(p.id)).map((p) => p.id);
+            if (ids.length) {
+              await onchainBurnMany({ executor, packageId: pkg, blockmonIds: ids, client, signAndExecute });
             }
-          }
+          }, { attempts: 4, baseDelayMs: 700 });
           const species = speciesCatalog.find((s) => s.name === newborn.species);
           const monId = species?.id ?? newborn.species;
-          const res = await onchainCreateBlockMon({
+          const res = await queueAndRetry('fusion.mint', async () => onchainCreateBlockMon({
             executor,
             packageId: pkg,
             sender: owner,
@@ -1118,7 +1336,7 @@ function GameApp() {
             skillDescription: String(newborn.skill?.description ?? ''),
             client,
             signAndExecute,
-          });
+          }), { attempts: 5, baseDelayMs: 700 });
           const fullType = `${pkg}::blockmon::BlockMon`;
           const objectId = extractCreatedByType(res, fullType);
           if (objectId) {
