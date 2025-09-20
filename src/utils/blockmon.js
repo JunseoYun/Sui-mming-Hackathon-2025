@@ -111,7 +111,7 @@ export function buildCreateBlockMonTx({
   const tx = new TransactionBlock();
 
   const created = tx.moveCall({
-    target: fn(pkg, "createBlockMon"),
+    target: fn(pkg, "create_block_mon"),
     arguments: [
       tx.pure.string(monId),
       tx.pure.string(name),
@@ -140,7 +140,7 @@ export function buildCreateManyBlockMonTx({ packageId, sender, entries }) {
   for (const e of entries || []) {
     if (!e) continue;
     const created = tx.moveCall({
-      target: fn(pkg, "createBlockMon"),
+      target: fn(pkg, "create_block_mon"),
       arguments: [
         tx.pure.string(e.monId),
         tx.pure.string(e.name),
@@ -158,6 +158,55 @@ export function buildCreateManyBlockMonTx({ packageId, sender, entries }) {
     createdObjects.push(created);
     tx.transferObjects([created], tx.pure.address(sender));
   }
+  return tx;
+}
+
+// Build: create MANY BlockMon via entry function (vectorized args) and internal transfer
+export function buildCreateManyBlockMonEntryTx({ packageId, sender, entries }) {
+  const pkg = resolvePackageId(packageId);
+  if (!sender) throw new Error("sender address is required to receive the newly created BlockMon");
+  const tx = new TransactionBlock();
+  const monIds = [];
+  const names = [];
+  const hps = [];
+  const strs = [];
+  const dexes = [];
+  const cons = [];
+  const ints = [];
+  const wises = [];
+  const chas = [];
+  const skillNames = [];
+  const skillDescriptions = [];
+  for (const e of entries || []) {
+    if (!e) continue;
+    monIds.push(tx.pure.string(e.monId));
+    names.push(tx.pure.string(e.name));
+    hps.push(tx.pure.u64(e.hp));
+    strs.push(tx.pure.u64(e.str));
+    dexes.push(tx.pure.u64(e.dex));
+    cons.push(tx.pure.u64(e.con));
+    ints.push(tx.pure.u64(e.int));
+    wises.push(tx.pure.u64(e.wis));
+    chas.push(tx.pure.u64(e.cha));
+    skillNames.push(tx.pure.string(e.skillName));
+    skillDescriptions.push(tx.pure.string(e.skillDescription));
+  }
+  tx.moveCall({
+    target: fn(pkg, "create_many_block_mon"),
+    arguments: [
+      tx.makeMoveVec({ type: "0x1::string::String", elements: monIds }),
+      tx.makeMoveVec({ type: "0x1::string::String", elements: names }),
+      tx.makeMoveVec({ type: "u64", elements: hps }),
+      tx.makeMoveVec({ type: "u64", elements: strs }),
+      tx.makeMoveVec({ type: "u64", elements: dexes }),
+      tx.makeMoveVec({ type: "u64", elements: cons }),
+      tx.makeMoveVec({ type: "u64", elements: ints }),
+      tx.makeMoveVec({ type: "u64", elements: wises }),
+      tx.makeMoveVec({ type: "u64", elements: chas }),
+      tx.makeMoveVec({ type: "0x1::string::String", elements: skillNames }),
+      tx.makeMoveVec({ type: "0x1::string::String", elements: skillDescriptions }),
+    ],
+  });
   return tx;
 }
 
@@ -245,7 +294,7 @@ export function buildRecordBattleTx({
   const pkg = resolvePackageId(packageId);
   const tx = new TransactionBlock();
   tx.moveCall({
-    target: fn(pkg, "recordBattle"),
+    target: fn(pkg, "record_battle"),
     arguments: [
       tx.object(blockmonId),
       tx.pure.string(opponent),
@@ -322,7 +371,8 @@ export async function createBlockMon({
 
 // Convenience: create MANY BlockMon in one tx
 export async function createManyBlockMon({ executor, packageId, sender, entries, client, signAndExecute }) {
-  const tx = buildCreateManyBlockMonTx({ packageId, sender, entries });
+  // Prefer vectorized entry to reduce PTB size and gas
+  const tx = buildCreateManyBlockMonEntryTx({ packageId, sender, entries });
   const res = await executeTransaction({ tx, executor, client, signAndExecute });
   return res;
 }

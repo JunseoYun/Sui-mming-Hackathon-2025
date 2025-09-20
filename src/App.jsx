@@ -425,14 +425,14 @@ function GameApp() {
     (async () => {
       try {
         const pkg = resolvePackageId();
-        // BM 토큰 총합 동기화
+        // BM 코인 총합 동기화
         try {
           const bmTotal = await getTotalBMTokenBalance(client, owner, pkg);
           if (!cancelled && Number.isFinite(bmTotal)) {
             setTokens(bmTotal);
           }
         } catch (e) {
-          console.error("[Onchain] load BM tokens failed", e);
+          console.error("[Onchain] load BM balance failed", e);
         }
         // 포션 총합 동기화 (읽기 종단일관성 고려: 짧은 재시도)
         let total = await getTotalPotionCountByType(client, owner, pkg, "HP");

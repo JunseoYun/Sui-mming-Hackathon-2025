@@ -1,4 +1,6 @@
 import { TransactionBlock } from "@mysten/sui.js/transactions";
+import { detectSigningStrategy } from "../utils/signer";
+import { mintBMCoin, getEnvBMTreasuryCapId, spendBMCoin, getEnvBMSinkAddress, getTotalBMTokenBalance as getTotalBMCoinBalance, listOwnedBMTokens, listOwnedPotions } from "../utils/inventory";
 
 /**
  * WARNING: Do NOT call `inventory::transfer_*` from the frontend.
@@ -11,8 +13,8 @@ import { TransactionBlock } from "@mysten/sui.js/transactions";
 export function createInventoryService({
   client,
   resolvePackageId,
-  listOwnedBMTokens,
-  listOwnedPotions,
+  listOwnedBMTokens: _listOwnedBMTokens,
+  listOwnedPotions: _listOwnedPotions,
   getTotalPotionCountByType,
   getTotalBMTokenBalance,
   onchainAddBMTokens,
@@ -36,19 +38,48 @@ export function createInventoryService({
     const owner = signing.address ?? currentAccount?.address ?? null;
     if (!owner) return;
     const pkg = resolvePackageId();
-    let bmTokenId = null;
-    try {
-      const res = await listOwnedBMTokens(client, owner, pkg, null, 50);
-      const first = (res?.data ?? [])[0];
-      bmTokenId = first?.data?.objectId ?? first?.objectId ?? null;
-    } catch (_) {}
-    if (bmTokenId) {
-      await queueAndRetry('inventory.addBMTokens', async () => onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount: normalized, client }), { attempts: 4, baseDelayMs: 500 });
+    // Prefer Coin<BM> mint when env-key + cap is available, else fallback to BMToken object flow
+    const capId = getEnvBMTreasuryCapId();
+    const strategy = detectSigningStrategy();
+    if (capId && strategy === 'env-key') {
+      await queueAndRetry('inventory.mintBMCoin', async () => mintBMCoin({ executor, packageId: pkg, capId, recipient: owner, amount: normalized, client }), { attempts: 4, baseDelayMs: 500 });
     } else {
-      await queueAndRetry('inventory.createBMToken', async () => onchainCreateBMToken({ executor, packageId: pkg, sender: owner, amount: normalized, tokenType: 'BM', client }), { attempts: 4, baseDelayMs: 500 });
+      let bmTokenId = null;
+      try {
+        const res = await (_listOwnedBMTokens || listOwnedBMTokens)(client, owner, pkg, null, 50);
+        const first = (res?.data ?? [])[0];
+        bmTokenId = first?.data?.objectId ?? first?.objectId ?? null;
+      } catch (_) {}
+      if (bmTokenId) {
+        await queueAndRetry('inventory.addBMTokens', async () => onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount: normalized, client }), { attempts: 4, baseDelayMs: 500 });
+      } else {
+        await queueAndRetry('inventory.createBMToken', async () => onchainCreateBMToken({ executor, packageId: pkg, sender: owner, amount: normalized, tokenType: 'BM', client }), { attempts: 4, baseDelayMs: 500 });
+      }
     }
-    const total = await getTotalBMTokenBalance(client, owner, pkg);
+    const total = await getTotalBMCoinBalance(client, owner, pkg);
     if (Number.isFinite(total)) setTokens(total);
+  };
+
+  // Bag helpers (lazy import to avoid circular)
+  const bag = (() => {
+    const i = require('../utils/inventory');
+    return {
+      listOwnedInventories: i.listOwnedInventories,
+      buildCreateInventoryTx: i.buildCreateInventoryTx,
+      buildAddPotionToInventoryTx: i.buildAddPotionToInventoryTx,
+      buildUsePotionsFromInventoryTx: i.buildUsePotionsFromInventoryTx,
+      getInventoryStructTag: i.getInventoryStructTag,
+    };
+  })();
+
+  const ensureInventory = async (owner, pkg) => {
+    try {
+      const res = await bag.listOwnedInventories(client, owner, pkg, null, 1);
+      const first = (res?.data ?? [])[0];
+      return first?.data?.objectId ?? first?.objectId ?? null;
+    } catch (_) {
+      return null;
+    }
   };
 
   const purchasePotions = async (amount, cost) => {
@@ -64,33 +95,44 @@ export function createInventoryService({
       if (owner) {
         const pkg = resolvePackageId();
         const beforeTotal = await getTotalPotionCountByType(client, owner, pkg, 'HP');
-        let bmTokenId = null;
-        let potionId = null;
-        try {
-          const resBM = await listOwnedBMTokens(client, owner, pkg, null, 50);
-          const firstBM = (resBM?.data ?? [])[0];
-          bmTokenId = firstBM?.data?.objectId ?? firstBM?.objectId ?? null;
-        } catch (_) {}
-        try {
-          const res = await listOwnedPotions(client, owner, pkg, null, 50);
-          const hpEntry = (res?.data ?? []).find((item) => {
-            const fields = item?.data?.content?.fields ?? item?.content?.fields;
-            return fields?.potion_type === 'HP';
-          });
-          potionId = hpEntry?.data?.objectId ?? hpEntry?.objectId ?? null;
-        } catch (_) {}
 
-        const tx = new TransactionBlock();
-        if (bmTokenId) {
-          tx.moveCall({ target: `${pkg}::inventory::subtract_bm_tokens`, arguments: [tx.object(bmTokenId), tx.pure.u64(costNormalized)] });
-        }
-        if (potionId) {
-          tx.moveCall({ target: `${pkg}::inventory::add_potions`, arguments: [tx.object(potionId), tx.pure.u64(amountNormalized)] });
+        // Spend BM first (prefer Coin<BM>)
+        const sink = getEnvBMSinkAddress();
+        if (sink) {
+          await queueAndRetry('inventory.spendBMCoin', async () => spendBMCoin({ executor, packageId: pkg, owner, amount: costNormalized, sinkAddress: sink, client }), { attempts: 4, baseDelayMs: 500 });
         } else {
-          const created = tx.moveCall({ target: `${pkg}::inventory::create_potion`, arguments: [tx.pure.string('HP'), tx.pure.u64(9999), tx.pure.u64(amountNormalized), tx.pure.string('HP Potion')] });
-          tx.transferObjects([created], tx.pure.address(owner));
+          // Fallback legacy BMToken spending if available
+          let bmTokenId = null;
+          try {
+            const resBM = await (_listOwnedBMTokens || listOwnedBMTokens)(client, owner, pkg, null, 50);
+            const firstBM = (resBM?.data ?? [])[0];
+            bmTokenId = firstBM?.data?.objectId ?? firstBM?.objectId ?? null;
+          } catch (_) {}
+          if (bmTokenId) {
+            const txSpend = new TransactionBlock();
+            txSpend.moveCall({ target: `${pkg}::inventory::subtract_bm_tokens`, arguments: [txSpend.object(bmTokenId), txSpend.pure.u64(costNormalized)] });
+            await queueAndRetry('inventory.spendBMToken', async () => executor(txSpend), { attempts: 4, baseDelayMs: 500 });
+          }
         }
-        const res = await queueAndRetry('inventory.purchasePotions', async () => executor(tx), { attempts: 4, baseDelayMs: 500 });
+
+        // Ensure Inventory exists
+        let inventoryId = await ensureInventory(owner, pkg);
+        if (!inventoryId) {
+          const txCreate = bag.buildCreateInventoryTx({ packageId: pkg, sender: owner });
+          const resCreate = await queueAndRetry('inventory.createInventory', async () => executor(txCreate), { attempts: 3, baseDelayMs: 400 });
+          try {
+            const digest = resCreate?.digest || resCreate?.effects?.transactionDigest || resCreate?.effectsDigest;
+            if (digest && typeof client.waitForTransactionBlock === 'function') {
+              await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true } });
+            }
+          } catch (_) {}
+          // fetch again
+          inventoryId = await ensureInventory(owner, pkg);
+        }
+
+        // Add potions to Inventory bag (HP kind=1, effect=9999 until balancing)
+        const tx = bag.buildAddPotionToInventoryTx({ packageId: pkg, inventoryId, potionType: 'HP', effectValue: 9999, quantity: amountNormalized, description: 'HP Potion' });
+        const res = await queueAndRetry('inventory.addPotionToInventory', async () => executor(tx), { attempts: 4, baseDelayMs: 500 });
         try {
           const digest = res?.digest || res?.effects?.transactionDigest || res?.effectsDigest;
           if (digest && typeof client.waitForTransactionBlock === 'function') {
@@ -98,6 +140,7 @@ export function createInventoryService({
           }
         } catch (_) {}
 
+        // Refresh UI counts
         try {
           let total = await getTotalPotionCountByType(client, owner, pkg, 'HP');
           const expected = Number(beforeTotal ?? 0) + Number(amountNormalized ?? 0);
@@ -106,7 +149,7 @@ export function createInventoryService({
             total = await getTotalPotionCountByType(client, owner, pkg, 'HP');
           }
           if (Number.isFinite(total)) setPotions(total);
-          const bmTotal = await getTotalBMTokenBalance(client, owner, pkg);
+          const bmTotal = await getTotalBMCoinBalance(client, owner, pkg);
           if (Number.isFinite(bmTotal)) setTokens(bmTotal);
         } catch (_) {}
       }

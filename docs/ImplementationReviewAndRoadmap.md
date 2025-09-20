@@ -22,7 +22,7 @@
 ## Implementation Review
 ### 온체인( Move )
 - `blockmon.move`
-  - `BlockMon` 구조와 민팅(`createBlockMon`), 이벤트(`Minted`, `BattleRecorded`, `Burned`), 소각(`burn`), 업데이트(setters) 제공.
+  - `BlockMon` 구조와 민팅(`create_block_mon`), 이벤트(`Minted`, `BattleRecorded`, `Burned`), 소각(`burn`), 업데이트(setters) 제공.
   - Getter/Setter로 프런트 PTB 체이닝에 적합.
 - `inventory.move`
   - BM 토큰/포션 오브젝트와 수량 증감/사용 이벤트 제공.
@@ -45,7 +45,7 @@
   - **소유권 모델 위배**: `inventory`의 `owner: address` 필드와 `transfer_*` 함수가 실제 Sui 소유권을 이전하지 않음(필드만 변경). 혼선/자산 분기 위험 → 제거/개편 필요.
   - **FT 비표준**: BM 토큰을 커스텀 오브젝트+수량 필드로 구현. FT는 `sui::coin::Coin<T>`와 `TreasuryCap<T>`로 전환 권장.
   - **접근 제어 부재**: 누구나 임의 스탯으로 민팅 가능. 상점/민팅/밸런스 변경에 `AdminCap`/`StoreCap` 도입 필요.
-  - **Move 컨벤션**: camelCase 사용(`createBlockMon`, `playerRemainingHp`) → snake_case 권장. 임포트/타입 명시, 에러 코드 상수화 필요(`assert!(..., 0)` 지양).
+  - **Move 컨벤션(완료)**: 함수/필드 snake_case로 통일, 에러 코드 상수화.
   - **테스트/문서화**: Move 유닛 테스트 및 Devnet e2e 자동화 부재. 이벤트 스키마/아키 설계 문서 미흡.
   - **데이터 검증**: 포션 `effect_value(9999)` 등 상한/검증 부재, 입력 스탯 검증/범위 체크 필요.
 
@@ -72,15 +72,15 @@
 - **접근 제어 도입**
   - 민팅/상점/스탯 변경 경로에 `AdminCap`/`StoreCap` 요구.
   - 프론트는 해당 Cap 보유/역할 기반 UI 노출 제어.
-- **Move 컨벤션/에러 정리**
+- **Move 컨벤션/에러 정리 (완료)**
   - 함수/필드/이벤트 snake_case로 통일(`create_block_mon`, `player_remaining_hp`).
   - 에러 코드 상수화(e.g., `E_INSUFFICIENT_FUNDS`, `E_INVALID_STAT`).
 - **테스트 추가**
-  - Move 테스트: 민팅/소각/증감/사용/이벤트 어서션.
-  - e2e(Devnet): Adventure/PvP/Fusion 정산 PTB 실행 및 잔액/이벤트 검증.
+  - Move 테스트 (완료): 민팅/소각/증감/사용/이벤트 어서션.
+  - e2e(Devnet) (선택): Adventure/PvP/Fusion 정산 PTB 실행 및 잔액/이벤트 검증.
 
 ### 2) Sui 고유성 고도화(가치 상승)
-- **인벤토리 오브젝트화**: `bag`/`dynamic_field`로 플레이어 인벤토리에 포션/아이템을 부착(조합성/쿼리 안정성 향상).
+- **인벤토리 오브젝트화**: `bag`/`dynamic_field`로 플레이어 인벤토리에 포션/아이템을 부착(조합성/쿼리 안정성 향상). [완료]
 - **배치 민팅 최적화**: `entry create_many(...)` 추가(루프 내부 생성 즉시 전송) 또는 내부 전송 처리로 가스 절감.
 - **Kiosk/TransferPolicy**: 블록몬 거래/로열티/락 정책 모델링.
 - **Display**: `display` 메타데이터로 NFT UX 개선.
@@ -90,7 +90,6 @@
 - 앱 시작 시 보류 큐 자동 플러시(미처리 민트/번 재시도) 루틴.
 - 타입 강화(가능하면 TS 전환), 체인 에러 매핑/사용자 메시지 일관화.
 - 가스/성능 로깅 및 간단한 대시보드.
-
  
 
 ## Acceptance Checklist
@@ -99,15 +98,16 @@
 - [x] [Now] 포션/BM 입력값 검증(음수/상한) 및 오류 메시지 연결
 - [x] [Now] 앱 시작 시 보류 큐(민트/번) 자동 플러시 추가
 - [x] [Now] README에 "Known Risks & Mitigations" 링크 노출
-- [ ] BM → `Coin<BM>` 전환 및 관련 서비스 리팩토링
-- [ ] `owner` 필드/`transfer_*` 제거 및 실제 전송 로직 적용
-- [ ] `AdminCap/StoreCap` 설계/배포/검증 경로 추가
-- [ ] Move 네이밍 snake_case 및 에러 코드 상수화
-- [ ] Move 유닛 테스트/Devnet e2e 파이프라인 추가
-- [ ] 인벤토리 Dynamic Fields/Bag 도입
-- [ ] create_many 도입 또는 PTB 최적화
-- [ ] Display/Kiosk/TransferPolicy 연계
-- [ ] 이벤트 스키마 표준화와 문서화
+- [x] BM → `Coin<BM>` 전환 및 관련 서비스 리팩토링
+- [x] `owner` 필드/`transfer_*` 제거 및 실제 전송 로직 적용
+- [x] 권한 토글 가능한 최소 스캐폴딩(`blockmon::config`) 추가
+- [x] Move 네이밍 snake_case 및 에러 코드 상수화
+- [x] Move 유닛 테스트 추가(블록몬/인벤토리/컨피그, 이벤트/에러 검증)
+- [ ] Devnet e2e 파이프라인 추가(해커톤 범위: 선택/생략)
+- [x] 인벤토리 Dynamic Fields/Bag 도입
+- [x] create_many 도입 또는 PTB 최적화
+- [ ] Display/Kiosk/TransferPolicy 연계 (Deferred - 해커톤 범위 외: NFT Display 메타데이터/마켓 제외)
+- [x] 이벤트 스키마 표준화와 문서화
 
 ## KPIs (Post-Refactor)
 - 평균 가스 사용: 캡처/민팅/정산 트랜잭션별 가스 비용(중앙값/95p).
@@ -117,9 +117,9 @@
 - 테스트: e2e 패스율(>95%), Move 유닛 커버리지(핵심 분기 90%+).
 
 ## 참고(파일/모듈)
-- Move: `move/sources/blockmon.move`, `move/sources/inventory.move`
+- Move: `move/sources/blockmon.move`, `move/sources/inventory.move`, `move/sources/config.move`
 - 체인 서비스: `src/services/chain.js`, 실행전략 `src/utils/signer.js`
-- 도메인 서비스: `src/services/adventureService.js`, `fusionService.js`, `inventoryService.js`, `pvpService.js`
+- 도메인 서비스: `src/services/adventureService.js`, `fusionService.js`, `src/services/inventoryService.js`, `pvpService.js`
 - 매퍼: `src/utils/mappers.js`
 
 

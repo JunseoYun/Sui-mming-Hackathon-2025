@@ -1,6 +1,8 @@
 import { translate, translateSpecies } from "../i18n";
 import { generateSeed, createBlockmonFromSeed, formatSeed } from "../utils/random";
 import { assembleBattleLog, formatLogTime } from "../utils/battleLog";
+import { detectSigningStrategy } from "../utils/signer";
+import { mintBMCoin, spendBMCoin, getEnvBMTreasuryCapId, getEnvBMSinkAddress, getTotalBMTokenBalance as getTotalBMCoinBalance } from "../utils/inventory";
 
 export function createAdventureService({
   getBlockmons,
@@ -178,19 +180,35 @@ export function createAdventureService({
                 potionId = hpEntry?.data?.objectId ?? hpEntry?.objectId ?? null;
               } catch (_) {}
             }
-            if (bmTokenId || (potionsUsed > 0 && potionId)) {
+            const capId = getEnvBMTreasuryCapId();
+            const sink = getEnvBMSinkAddress();
+            const strategy = detectSigningStrategy();
+            // Spend 1 BM for adventure
+            if (sink) {
+              await queueAndRetry('adventure.spendBMCoin', async () => spendBMCoin({ executor, packageId: pkg, owner, amount: 1, sinkAddress: sink, client }), { attempts: 4, baseDelayMs: 500 });
+            } else if (bmTokenId) {
               const tx = new (await import("@mysten/sui.js/transactions")).TransactionBlock();
-              if (bmTokenId) {
-                if (tokensEarned > 0) tx.moveCall({ target: `${pkg}::inventory::add_bm_tokens`, arguments: [tx.object(bmTokenId), tx.pure.u64(tokensEarned)] });
-                tx.moveCall({ target: `${pkg}::inventory::subtract_bm_tokens`, arguments: [tx.object(bmTokenId), tx.pure.u64(1)] });
+              tx.moveCall({ target: `${pkg}::inventory::subtract_bm_tokens`, arguments: [tx.object(bmTokenId), tx.pure.u64(1)] });
+              await queueAndRetry('adventure.subBMToken', async () => executor(tx), { attempts: 4, baseDelayMs: 500 });
+            }
+            // Reward tokensEarned
+            if (tokensEarned > 0) {
+              if (capId && strategy === 'env-key') {
+                await queueAndRetry('adventure.mintBMCoin', async () => mintBMCoin({ executor, packageId: pkg, capId, recipient: owner, amount: tokensEarned, client }), { attempts: 4, baseDelayMs: 500 });
+              } else if (bmTokenId) {
+                const tx2 = new (await import("@mysten/sui.js/transactions")).TransactionBlock();
+                tx2.moveCall({ target: `${pkg}::inventory::add_bm_tokens`, arguments: [tx2.object(bmTokenId), tx2.pure.u64(tokensEarned)] });
+                await queueAndRetry('adventure.addBMToken', async () => executor(tx2), { attempts: 4, baseDelayMs: 500 });
               }
-              if (potionsUsed > 0 && potionId) {
-                tx.moveCall({ target: `${pkg}::inventory::use_potion`, arguments: [tx.object(potionId), tx.pure.u64(potionsUsed)] });
-              }
-              await queueAndRetry('adventure.settle', async () => executor(tx), { attempts: 4, baseDelayMs: 500 });
+            }
+            // Use potions
+            if (potionsUsed > 0 && potionId) {
+              const tx3 = new (await import("@mysten/sui.js/transactions")).TransactionBlock();
+              tx3.moveCall({ target: `${pkg}::inventory::use_potion`, arguments: [tx3.object(potionId), tx3.pure.u64(potionsUsed)] });
+              await queueAndRetry('adventure.usePotion', async () => executor(tx3), { attempts: 4, baseDelayMs: 500 });
             }
             try {
-              const bmTotal = await getTotalBMTokenBalance(client, owner, pkg);
+              const bmTotal = await getTotalBMCoinBalance(client, owner, pkg);
               if (Number.isFinite(bmTotal)) setTokens(bmTotal);
             } catch (_) {}
             try {

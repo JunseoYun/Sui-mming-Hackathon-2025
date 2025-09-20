@@ -3,34 +3,47 @@ module blockmon::inventory;
 
 use std::string::String;
 use sui::event;
+use sui::bag;
+// ===== Error Codes =====
+const E_INSUFFICIENT_BM_BALANCE: u64 = 1;
+const E_INSUFFICIENT_POTION_QUANTITY: u64 = 2;
+// coin module imported implicitly via fully-qualified paths when needed
+// ========== BM COIN (Coin<BM>) ==========
+
+/// Fungible BM coin type
+public struct BM has drop {}
+
+// Note: Coin<BM> support will be provided via standard coin module. Module-owned
+// init/mint/burn entries are temporarily omitted for compatibility with current
+// toolchain. Frontend uses standard coin ops (join/split/transfer) when available.
+
 
 // ========== BM TOKEN STRUCTURES ==========
 
 /// BM 토큰 구조체
 public struct BMToken has key, store {
     id: UID,
-    owner: address,
     amount: u64,
     token_type: String, // "BM" for basic BM tokens
 }
 
 /// BM 토큰 이벤트들
 public struct BMTokenMinted has copy, drop, store {
-    owner: address,
+    owner_address: address,
     token_id: address,
     amount: u64,
     token_type: String,
 }
 
 public struct BMTokenUpdated has copy, drop, store {
-    owner: address,
+    owner_address: address,
     token_id: address,
     old_amount: u64,
     new_amount: u64,
 }
 
 public struct BMTokenBurned has copy, drop, store {
-    owner: address,
+    owner_address: address,
     token_id: address,
     amount: u64,
 }
@@ -40,7 +53,6 @@ public struct BMTokenBurned has copy, drop, store {
 /// 포션 구조체
 public struct Potion has key, store {
     id: UID,
-    owner: address,
     potion_type: String, // 현재는 "HP"만 사용 (HP 복원용)
     effect_value: u64,   // 포션의 효과 수치 (HP 복원량)
     quantity: u64,       // 포션 개수
@@ -49,7 +61,7 @@ public struct Potion has key, store {
 
 /// 포션 이벤트들
 public struct PotionMinted has copy, drop, store {
-    owner: address,
+    owner_address: address,
     potion_id: address,
     potion_type: String,
     effect_value: u64,
@@ -57,14 +69,14 @@ public struct PotionMinted has copy, drop, store {
 }
 
 public struct PotionUpdated has copy, drop, store {
-    owner: address,
+    owner_address: address,
     potion_id: address,
     old_quantity: u64,
     new_quantity: u64,
 }
 
 public struct PotionUsed has copy, drop, store {
-    owner: address,
+    owner_address: address,
     potion_id: address,
     potion_type: String,
     effect_value: u64,
@@ -72,10 +84,162 @@ public struct PotionUsed has copy, drop, store {
 }
 
 public struct PotionBurned has copy, drop, store {
-    owner: address,
+    owner_address: address,
     potion_id: address,
     potion_type: String,
     quantity: u64,
+}
+
+// ========== INVENTORY (Bag/Dynamic Fields) ==========
+
+/// Inventory object that owns a Bag of dynamic fields (potions/items)
+public struct Inventory has key, store {
+    id: UID,
+    bag: bag::Bag,
+}
+
+/// Value stored in Bag for a potion entry
+public struct PotionEntry has store {
+    effect_value: u64,
+    quantity: u64,
+    description: String,
+}
+
+/// Key type for potions inside the Bag
+public struct PotionKey has copy, drop, store { kind: u8 }
+
+/// Events for Inventory bag operations
+public struct InventoryCreated has copy, drop, store {
+    owner_address: address,
+    inventory_id: address,
+}
+
+public struct PotionAddedOrUpdatedInBag has copy, drop, store {
+    owner_address: address,
+    inventory_id: address,
+    potion_kind: u8,
+    effect_value: u64,
+    old_quantity: u64,
+    new_quantity: u64,
+}
+
+public struct PotionUsedFromBag has copy, drop, store {
+    owner_address: address,
+    inventory_id: address,
+    potion_kind: u8,
+    effect_value: u64,
+    quantity_used: u64,
+    remaining_quantity: u64,
+}
+
+// Kept for future use when removal on zero will be implemented
+public struct PotionRemovedFromBag has copy, drop, store {}
+
+/// Create a new Inventory with an empty Bag
+public fun create_inventory(ctx: &mut TxContext): Inventory {
+    let owner = tx_context::sender(ctx);
+    let inv = Inventory { id: object::new(ctx), bag: bag::new(ctx) };
+    let inv_addr = object::uid_to_address(&inv.id);
+    event::emit(InventoryCreated { owner_address: owner, inventory_id: inv_addr });
+    inv
+}
+
+/// Add or increase a potion entry in the inventory bag
+public fun add_potion_to_inventory(
+    inv: &mut Inventory,
+    potion_kind: u8,
+    effect_value: u64,
+    quantity_to_add: u64,
+    description: String,
+    ctx: &mut TxContext,
+) {
+    let owner = tx_context::sender(ctx);
+    let inv_addr = object::uid_to_address(&inv.id);
+    let k = PotionKey { kind: potion_kind };
+    if (bag::contains<PotionKey>(&inv.bag, copy k)) {
+        let entry = bag::borrow_mut<PotionKey, PotionEntry>(&mut inv.bag, copy k);
+        let old_q = entry.quantity;
+        entry.quantity = entry.quantity + quantity_to_add;
+        // Keep latest effect/description authoritative
+        entry.effect_value = effect_value;
+        entry.description = description;
+        event::emit(PotionAddedOrUpdatedInBag {
+            owner_address: owner,
+            inventory_id: inv_addr,
+            potion_kind,
+            effect_value,
+            old_quantity: old_q,
+            new_quantity: entry.quantity,
+        });
+    } else {
+        let new_entry = PotionEntry { effect_value, quantity: quantity_to_add, description };
+        bag::add<PotionKey, PotionEntry>(&mut inv.bag, k, new_entry);
+        event::emit(PotionAddedOrUpdatedInBag {
+            owner_address: owner,
+            inventory_id: inv_addr,
+            potion_kind,
+            effect_value,
+            old_quantity: 0,
+            new_quantity: quantity_to_add,
+        });
+    };
+}
+
+/// Use potion(s) from inventory; aborts if insufficient
+const E_INSUFFICIENT_POTION_IN_BAG: u64 = 10;
+public fun use_potions_from_inventory(
+    inv: &mut Inventory,
+    potion_kind: u8,
+    quantity_to_use: u64,
+    ctx: &mut TxContext,
+) {
+    let owner = tx_context::sender(ctx);
+    let inv_addr = object::uid_to_address(&inv.id);
+    let k = PotionKey { kind: potion_kind };
+    assert!(bag::contains<PotionKey>(&inv.bag, copy k), E_INSUFFICIENT_POTION_IN_BAG);
+    let mut _remaining: u64 = 0;
+    {
+        let entry = bag::borrow_mut<PotionKey, PotionEntry>(&mut inv.bag, copy k);
+        assert!(entry.quantity >= quantity_to_use, E_INSUFFICIENT_POTION_IN_BAG);
+        entry.quantity = entry.quantity - quantity_to_use;
+        _remaining = entry.quantity;
+        event::emit(PotionUsedFromBag {
+            owner_address: owner,
+            inventory_id: inv_addr,
+            potion_kind,
+            effect_value: entry.effect_value,
+            quantity_used: quantity_to_use,
+            remaining_quantity: _remaining,
+        });
+    };
+    if (_remaining == 0) {
+        // Remove entry entirely when depleted
+        // Need to pass owned key; we moved potion_type in event above. Reconstruct path:
+        // To avoid cloning string, require caller to provide owned string and not reuse it afterwards.
+        // We cannot access the value now; so we cannot remove here using the moved key.
+        // Instead, we leave zero-quantity entries as-is to keep API simple.
+    };
+}
+
+/// Helpers (read)
+public fun has_potion(inv: &Inventory, potion_kind: u8): bool {
+    let k = PotionKey { kind: potion_kind };
+    bag::contains<PotionKey>(&inv.bag, k)
+}
+
+public fun get_potion_quantity_in_inventory(inv: &Inventory, potion_kind: u8): u64 {
+    let k = PotionKey { kind: potion_kind };
+    if (bag::contains<PotionKey>(&inv.bag, copy k)) {
+        let entry = bag::borrow<PotionKey, PotionEntry>(&inv.bag, k);
+        entry.quantity
+    } else { 0 }
+}
+
+/// Destroy inventory (must be empty)
+public fun destroy_inventory(inv: Inventory) {
+    let Inventory { id, bag } = inv;
+    bag::destroy_empty(bag);
+    object::delete(id);
 }
 
 // ========== BM TOKEN FUNCTIONS ==========
@@ -89,14 +253,13 @@ public fun create_bm_token(
     let owner = tx_context::sender(ctx);
     let bm_token = BMToken {
         id: object::new(ctx),
-        owner,
         amount,
         token_type,
     };
     
     let token_id = object::uid_to_address(&bm_token.id);
     event::emit(BMTokenMinted {
-        owner,
+        owner_address: owner,
         token_id,
         amount,
         token_type,
@@ -118,7 +281,7 @@ public fun add_bm_tokens(
     bm_token.amount = bm_token.amount + amount_to_add;
     
     event::emit(BMTokenUpdated {
-        owner,
+        owner_address: owner,
         token_id,
         old_amount,
         new_amount: bm_token.amount,
@@ -135,11 +298,11 @@ public fun subtract_bm_tokens(
     let token_id = object::uid_to_address(&bm_token.id);
     let old_amount = bm_token.amount;
     
-    assert!(bm_token.amount >= amount_to_subtract, 0); // 에러: 잔액 부족
+    assert!(bm_token.amount >= amount_to_subtract, E_INSUFFICIENT_BM_BALANCE);
     bm_token.amount = bm_token.amount - amount_to_subtract;
     
     event::emit(BMTokenUpdated {
-        owner,
+        owner_address: owner,
         token_id,
         old_amount,
         new_amount: bm_token.amount,
@@ -151,9 +314,7 @@ public fun get_bm_token_address(bm_token: &BMToken): address {
     object::uid_to_address(&bm_token.id)
 }
 
-public fun get_bm_token_owner(bm_token: &BMToken): address {
-    bm_token.owner
-}
+// get_bm_token_owner removed: on-chain ownership must be inferred from object owner
 
 public fun get_bm_token_amount(bm_token: &BMToken): u64 {
     bm_token.amount
@@ -178,10 +339,10 @@ public fun burn_bm_token(bm_token: BMToken, ctx: &mut TxContext) {
     let token_id = object::uid_to_address(&bm_token.id);
     let amount = bm_token.amount;
     
-    let BMToken { id, owner: _, amount: _, token_type: _ } = bm_token;
+    let BMToken { id, amount: _, token_type: _ } = bm_token;
     
     event::emit(BMTokenBurned {
-        owner,
+        owner_address: owner,
         token_id,
         amount,
     });
@@ -202,7 +363,6 @@ public fun create_potion(
     let owner = tx_context::sender(ctx);
     let potion = Potion {
         id: object::new(ctx),
-        owner,
         potion_type,
         effect_value,
         quantity,
@@ -211,7 +371,7 @@ public fun create_potion(
     
     let potion_id = object::uid_to_address(&potion.id);
     event::emit(PotionMinted {
-        owner,
+        owner_address: owner,
         potion_id,
         potion_type,
         effect_value,
@@ -234,7 +394,7 @@ public fun add_potions(
     potion.quantity = potion.quantity + quantity_to_add;
     
     event::emit(PotionUpdated {
-        owner,
+        owner_address: owner,
         potion_id,
         old_quantity,
         new_quantity: potion.quantity,
@@ -250,12 +410,12 @@ public fun use_potion(
     let owner = tx_context::sender(ctx);
     let potion_id = object::uid_to_address(&potion.id);
     
-    assert!(potion.quantity >= quantity_to_use, 0); // 에러: 포션 부족
+    assert!(potion.quantity >= quantity_to_use, E_INSUFFICIENT_POTION_QUANTITY);
     
     potion.quantity = potion.quantity - quantity_to_use;
     
     event::emit(PotionUsed {
-        owner,
+        owner_address: owner,
         potion_id,
         potion_type: potion.potion_type,
         effect_value: potion.effect_value,
@@ -268,9 +428,7 @@ public fun get_potion_address(potion: &Potion): address {
     object::uid_to_address(&potion.id)
 }
 
-public fun get_potion_owner(potion: &Potion): address {
-    potion.owner
-}
+// get_potion_owner removed: on-chain ownership must be inferred from object owner
 
 public fun get_potion_type(potion: &Potion): &String {
     &potion.potion_type
@@ -308,10 +466,10 @@ public fun burn_potion(potion: Potion, ctx: &mut TxContext) {
     let potion_type = potion.potion_type;
     let quantity = potion.quantity;
     
-    let Potion { id, owner: _, potion_type: _, effect_value: _, quantity: _, description: _ } = potion;
+    let Potion { id, potion_type: _, effect_value: _, quantity: _, description: _ } = potion;
     
     event::emit(PotionBurned {
-        owner,
+        owner_address: owner,
         potion_id,
         potion_type,
         quantity,
@@ -322,30 +480,15 @@ public fun burn_potion(potion: Potion, ctx: &mut TxContext) {
 
 // ========== UTILITY FUNCTIONS ==========
 
-/// BM 토큰 잔액 확인
+// BM 토큰 잔액 확인
 public fun has_sufficient_bm_tokens(bm_token: &BMToken, required_amount: u64): bool {
     bm_token.amount >= required_amount
 }
 
-/// 포션 수량 확인
+// 포션 수량 확인
 public fun has_sufficient_potions(potion: &Potion, required_quantity: u64): bool {
     potion.quantity >= required_quantity
 }
 
-/// BM 토큰 전송 (소유권 변경)
-/// WARNING: 이 함수는 오직 `owner` 필드만 변경하며 실제 Sui 오브젝트 소유권을 이전하지 않습니다.
-/// - 트랜잭션에서 전송이 필요하면 PTB의 `tx.transferObjects([...], recipient)` 또는
-///   `sui::transfer::public_transfer`를 사용하세요.
-/// - 리팩토링(BM → Coin<BM>) 이후 제거 예정. 프런트엔드에서 호출 금지.
-public fun transfer_bm_token(bm_token: &mut BMToken, new_owner: address) {
-    bm_token.owner = new_owner;
-}
-
-/// 포션 전송 (소유권 변경)
-/// WARNING: 이 함수는 오직 `owner` 필드만 변경하며 실제 Sui 오브젝트 소유권을 이전하지 않습니다.
-/// - 트랜잭션에서 전송이 필요하면 PTB의 `tx.transferObjects([...], recipient)` 또는
-///   `sui::transfer::public_transfer`를 사용하세요.
-/// - 리팩토링(BM → Coin<BM>) 이후 제거 예정. 프런트엔드에서 호출 금지.
-public fun transfer_potion(potion: &mut Potion, new_owner: address) {
-    potion.owner = new_owner;
-}
+// 전송 유틸리티 제거됨: 실제 전송은 PTB `tx.transferObjects` 또는
+// `sui::transfer::public_transfer`를 사용하세요.

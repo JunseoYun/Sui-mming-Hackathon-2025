@@ -1,5 +1,7 @@
 import { translate } from "../i18n";
 import { assembleBattleLog } from "../utils/battleLog";
+import { detectSigningStrategy } from "../utils/signer";
+import { mintBMCoin, spendBMCoin, getEnvBMTreasuryCapId, getEnvBMSinkAddress, getTotalBMTokenBalance as getTotalBMCoinBalance } from "../utils/inventory";
 
 export function createPvpService({
   getTokens,
@@ -99,20 +101,40 @@ export function createPvpService({
       (async () => {
         try {
           const pkg = resolvePackageId();
-          let bmTokenId = null;
-          const resBM = await listOwnedBMTokens(client, ownerForPvp, pkg, null, 50);
-          const firstBM = (resBM?.data ?? [])[0];
-          bmTokenId = firstBM?.data?.objectId ?? firstBM?.objectId ?? null;
-          if (bmTokenId) {
-            if (reward > 0) {
-              await queueAndRetry('pvp.addBMTokens', async () => onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount: reward, client }), { attempts: 4, baseDelayMs: 600 });
-            }
-            const totalCost = fee + stake;
-            if (totalCost > 0) {
+          const capId = getEnvBMTreasuryCapId();
+          const sink = getEnvBMSinkAddress();
+          const strategy = detectSigningStrategy();
+          const totalCost = fee + stake;
+          if (totalCost > 0 && sink) {
+            await queueAndRetry('pvp.spendBMCoin', async () => spendBMCoin({ executor, packageId: pkg, owner: ownerForPvp, amount: totalCost, sinkAddress: sink, client }), { attempts: 4, baseDelayMs: 600 });
+          } else {
+            // fallback to BMToken object path
+            let bmTokenId = null;
+            try {
+              const resBM = await listOwnedBMTokens(client, ownerForPvp, pkg, null, 50);
+              const firstBM = (resBM?.data ?? [])[0];
+              bmTokenId = firstBM?.data?.objectId ?? firstBM?.objectId ?? null;
+            } catch (_) {}
+            if (bmTokenId && totalCost > 0) {
               await queueAndRetry('pvp.subtractBMTokens', async () => onchainSubtractBMTokens({ executor, packageId: pkg, bmTokenId, amount: totalCost, client }), { attempts: 4, baseDelayMs: 600 });
             }
           }
-          const bmTotal = await getTotalBMTokenBalance(client, ownerForPvp, pkg);
+          if (reward > 0) {
+            if (capId && strategy === 'env-key') {
+              await queueAndRetry('pvp.mintBMCoin', async () => mintBMCoin({ executor, packageId: pkg, capId, recipient: ownerForPvp, amount: reward, client }), { attempts: 4, baseDelayMs: 600 });
+            } else {
+              let bmTokenId = null;
+              try {
+                const resBM = await listOwnedBMTokens(client, ownerForPvp, pkg, null, 50);
+                const firstBM = (resBM?.data ?? [])[0];
+                bmTokenId = firstBM?.data?.objectId ?? firstBM?.objectId ?? null;
+              } catch (_) {}
+              if (bmTokenId) {
+                await queueAndRetry('pvp.addBMTokens', async () => onchainAddBMTokens({ executor, packageId: pkg, bmTokenId, amount: reward, client }), { attempts: 4, baseDelayMs: 600 });
+              }
+            }
+          }
+          const bmTotal = await getTotalBMCoinBalance(client, ownerForPvp, pkg);
           if (Number.isFinite(bmTotal)) setTokens(bmTotal);
         } catch (e) {
           console.error('[Onchain] reflect BM after PVP failed', e);

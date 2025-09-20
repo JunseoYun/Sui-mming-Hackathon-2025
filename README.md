@@ -109,6 +109,35 @@ npm run dev
 
 * **For more details, please refer to the following document section: **[Implementation Review and Roadmap - Known Risks &amp; Mitigations](https://www.google.com/search?q=docs/ImplementationReviewAndRoadmap.md%23known-risks--mitigations "null")
 
+## Event Schema (Standardized)
+
+All event field names use snake_case, with these conventions:
+- address values: suffixed with `_address`
+- object addresses (object id as address): suffixed with `_id`
+
+BlockMon (`blockmon`):
+- Minted: `owner_address`, `mon_id`
+- BattleRecorded: `player_address`, `mon_id`, `opponent`, `won`, `player_remaining_hp`, `opponent_remaining_hp`
+- Burned: `owner_address`, `mon_id`
+
+Inventory (`inventory`):
+- BMTokenMinted: `owner_address`, `token_id`, `amount`, `token_type`
+- BMTokenUpdated: `owner_address`, `token_id`, `old_amount`, `new_amount`
+- BMTokenBurned: `owner_address`, `token_id`, `amount`
+- PotionMinted: `owner_address`, `potion_id`, `potion_type`, `effect_value`, `quantity`
+- PotionUpdated: `owner_address`, `potion_id`, `old_quantity`, `new_quantity`
+- PotionUsed: `owner_address`, `potion_id`, `potion_type`, `effect_value`, `quantity_used`
+- PotionBurned: `owner_address`, `potion_id`, `potion_type`, `quantity`
+- InventoryCreated: `owner_address`, `inventory_id`
+- PotionAddedOrUpdatedInBag: `owner_address`, `inventory_id`, `potion_kind`, `effect_value`, `old_quantity`, `new_quantity`
+- PotionUsedFromBag: `owner_address`, `inventory_id`, `potion_kind`, `effect_value`, `quantity_used`, `remaining_quantity`
+
+Query pattern (example):
+```js
+const type = `${packageId}::blockmon::Minted`;
+const res = await client.queryEvents({ query: { MoveEventType: type }, limit: 50 });
+```
+
 ## Vite Template Reference
 
 * **Includes settings for HMR and ESLint.**
