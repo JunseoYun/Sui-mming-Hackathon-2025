@@ -425,6 +425,75 @@ function GameApp() {
     return () => { cancelled = true; };
   }, [client, signing.address, currentAccount?.address, executor]);
 
+  // ----- Pending burn queue (local persistence) -----
+  const PENDING_BURN_KEY = 'blockmon_pending_burn_ids';
+  const loadPendingBurns = () => {
+    try {
+      const raw = localStorage.getItem(PENDING_BURN_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (_) { return []; }
+  };
+  const savePendingBurns = (arr) => {
+    try { localStorage.setItem(PENDING_BURN_KEY, JSON.stringify(arr || [])); } catch (_) {}
+  };
+  const enqueuePendingBurns = (ids) => {
+    if (!Array.isArray(ids) || ids.length === 0) return;
+    const current = loadPendingBurns();
+    const set = new Set(current);
+    for (const id of ids) if (id) set.add(id);
+    savePendingBurns(Array.from(set));
+  };
+  const removeBurnIdsFromQueue = (ids) => {
+    if (!Array.isArray(ids) || ids.length === 0) return;
+    const current = loadPendingBurns();
+    const removeSet = new Set(ids);
+    const remain = current.filter((id) => !removeSet.has(id));
+    savePendingBurns(remain);
+  };
+
+  // Flush pending burns on owner ready
+  useEffect(() => {
+    const owner = signing.address ?? currentAccount?.address ?? null;
+    if (!owner) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const pkg = resolvePackageId();
+        const all = loadPendingBurns();
+        if (!all.length) return;
+        const BATCH_SIZE = 10;
+        for (let i = 0; i < all.length; i += BATCH_SIZE) {
+          if (cancelled) break;
+          const batch = all.slice(i, i + BATCH_SIZE).filter(Boolean);
+          if (!batch.length) continue;
+          try {
+            logTxStart('pending.burn.batch', { size: batch.length, offset: i });
+            await queueAndRetry('pending.burn.batch', async () => onchainBurnMany({ executor, packageId: pkg, blockmonIds: batch, client, signAndExecute }), { attempts: 5, baseDelayMs: 700 });
+            removeBurnIdsFromQueue(batch);
+            logTxSuccess('pending.burn.batch', { digest: null }, { size: batch.length, offset: i });
+          } catch (err) {
+            logTxError('pending.burn.batch', err, { size: batch.length, offset: i, fallback: true });
+            for (const id of batch) {
+              try {
+                logTxStart('pending.burn.single', { id });
+                await queueAndRetry('pending.burn.single', async () => onchainBurn({ executor, packageId: pkg, blockmonId: id, client, signAndExecute }), { attempts: 6, baseDelayMs: 600 });
+                removeBurnIdsFromQueue([id]);
+                logTxSuccess('pending.burn.single', { digest: null }, { id });
+              } catch (e2) {
+                logTxError('pending.burn.single', e2, { id });
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[Onchain] flush pending burns failed', e);
+        logTxError('pending.burn', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [client, signing.address, currentAccount?.address, executor]);
+
   // 체인 BlockMon -> 로컬 모델 매핑
   const mapOnchainToLocal = (entry) => {
     try {
@@ -1313,12 +1382,18 @@ function GameApp() {
         try {
           const pkg = resolvePackageId();
           // 부모 소각을 하나의 트랜잭션으로 직렬화 실행 (gas version 충돌 방지)
-          await queueAndRetry('fusion.burnMany', async () => {
-            const ids = parents.filter((p) => p.id && /^0x[0-9a-fA-F]+$/.test(p.id)).map((p) => p.id);
-            if (ids.length) {
-              await onchainBurnMany({ executor, packageId: pkg, blockmonIds: ids, client, signAndExecute });
-            }
-          }, { attempts: 4, baseDelayMs: 700 });
+          const burnIds = parents.filter((p) => p.id && /^0x[0-9a-fA-F]+$/.test(p.id)).map((p) => p.id);
+          try {
+            await queueAndRetry('fusion.burnMany', async () => {
+              if (burnIds.length) {
+                await onchainBurnMany({ executor, packageId: pkg, blockmonIds: burnIds, client, signAndExecute });
+              }
+            }, { attempts: 4, baseDelayMs: 700 });
+          } catch (burnErr) {
+            // enqueue for later flush
+            enqueuePendingBurns(burnIds);
+            throw burnErr;
+          }
           const species = speciesCatalog.find((s) => s.name === newborn.species);
           const monId = species?.id ?? newborn.species;
           const res = await queueAndRetry('fusion.mint', async () => onchainCreateBlockMon({
