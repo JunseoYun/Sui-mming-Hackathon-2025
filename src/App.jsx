@@ -26,6 +26,7 @@ import {
   SuiClientProvider,
   useSuiClientContext,
   useSignAndExecuteTransaction,
+  useCurrentAccount,
   WalletProvider,
 } from "@mysten/dapp-kit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -39,6 +40,15 @@ import {
   buildWalletExecutor,
   getAddressFromKeypair,
 } from "./utils/signer";
+import {
+  listOwnedBlockMons,
+  createBlockMon as onchainCreateBlockMon,
+  extractCreatedByType,
+  getBlockMon,
+  burn as onchainBurn,
+  resolvePackageId,
+} from "./utils/blockmon";
+import { catalog as speciesCatalog } from "./utils/random";
 
 const pages = {
   home: { labelKey: "nav.home", component: Home, showInNav: true },
@@ -195,6 +205,7 @@ function GameApp() {
 
   const { client, network } = useSuiClientContext();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const currentAccount = useCurrentAccount();
 
   const executor = useMemo(() => {
     const strategy = detectSigningStrategy();
@@ -208,15 +219,91 @@ function GameApp() {
         console.error("[Signer] env-key init failed, falling back to wallet:", e);
       }
     }
-    setSigning({ strategy: "wallet", address: null });
+    setSigning({ strategy: "wallet", address: currentAccount?.address ?? null });
     return buildWalletExecutor(signAndExecute);
-  }, [client, signAndExecute]);
+  }, [client, signAndExecute, currentAccount?.address]);
 
   const t = useMemo(() => {
     const translateFn = (key, params) => translate(language, key, params);
     translateFn.language = language;
     return translateFn;
   }, [language]);
+
+  // 체인 BlockMon -> 로컬 모델 매핑
+  const mapOnchainToLocal = (entry) => {
+    try {
+      const objectId = entry?.data?.objectId ?? entry?.objectId ?? null;
+      const content = entry?.data?.content ?? entry?.content ?? null;
+      const fields = content?.fields ?? null;
+      if (!objectId || !fields) return null;
+      const base = fields.base?.fields ?? {};
+      const skill = fields.skill?.fields ?? {};
+      const monId = fields.monId ?? fields.mon_id ?? fields.monID ?? fields.monid ?? "";
+      const speciesEntry = speciesCatalog.find((s) => s.id === monId);
+      const speciesName = speciesEntry?.name ?? monId ?? "";
+      const stats = {
+        str: Number(base.str ?? 0),
+        dex: Number(base.dex ?? 0),
+        con: Number(base.con ?? 0),
+        int: Number(base.int ?? 0),
+        wis: Number(base.wis ?? 0),
+        cha: Number(base.cha ?? 0),
+      };
+      const hp = Number(base.hp ?? 0);
+      const power = hp + Object.values(stats).reduce((a, b) => a + Number(b || 0), 0);
+      return {
+        id: objectId,
+        onchain: true,
+        speciesId: monId,
+        species: speciesName,
+        name: fields.name ?? speciesName,
+        dna: objectId,
+        hp,
+        maxHp: hp,
+        stats,
+        skill: {
+          name: String(skill.name ?? ""),
+          description: String(skill.description ?? ""),
+        },
+        rank: undefined,
+        origin: "온체인",
+        power,
+      };
+    } catch (e) {
+      console.warn("[Onchain->Local] map failed", e, entry);
+      return null;
+    }
+  };
+
+  // 주소가 준비되면 온체인 보유 BlockMon을 로드
+  useEffect(() => {
+    const owner = signing.address ?? currentAccount?.address ?? null;
+    if (!owner) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const all = [];
+        let cursor = null;
+        const pkg = resolvePackageId();
+        do {
+          const res = await listOwnedBlockMons(client, owner, pkg, cursor, 50);
+          const page = (res?.data ?? []).map(mapOnchainToLocal).filter(Boolean);
+          all.push(...page);
+          cursor = res?.nextCursor ?? null;
+        } while (cursor);
+        if (!cancelled) {
+          setBlockmons(all);
+          setAdventureSelection((prev) => (prev?.length ? prev : all.slice(0, 4).map((m) => m.id)));
+          setPvpSelection((prev) => (prev?.length ? prev : all.slice(0, 4).map((m) => m.id)));
+        }
+      } catch (e) {
+        console.error("[Onchain] load owned failed", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [client, signing.address, currentAccount?.address]);
 
   const appendSeed = (seedHex, context) => {
     setSeedHistory((prev) => [
@@ -230,31 +317,17 @@ function GameApp() {
   };
 
   const registerUser = (nickname) => {
-    const starterSeed = generateSeed();
-    const starter = createBlockmonFromSeed(starterSeed, {
-      origin: "스타터 DNA",
-    });
     setPlayer({
       nickname,
       joinedAt: new Date().toISOString(),
-      starterSeed: formatSeed(starterSeed),
+      starterSeed: undefined,
     });
     setTokens(10);
-    setBlockmons([starter]);
-    setAdventureSelection([starter.id]);
-    setPvpSelection([starter.id]);
+    setBlockmons([]);
+    setAdventureSelection([]);
+    setPvpSelection([]);
     setPotions(2);
-    setDnaVault([
-      {
-        dna: starter.dna,
-        species: starter.species,
-        seed: starter.seed,
-        status: "활성",
-        acquiredAt: new Date().toISOString(),
-        note: "가입 보상",
-      },
-    ]);
-    appendSeed(formatSeed(starterSeed), "Starter DNA");
+    setDnaVault([]);
     setSystemMessage({ key: "system.starterCreated" });
     setCurrentPage("home");
   };
@@ -557,6 +630,57 @@ function GameApp() {
       },
     });
     setCurrentPage('adventure');
+    
+    // 온체인에 포획된 블록몬 민트 (비동기 실행)
+    const owner = signing.address ?? currentAccount?.address ?? null;
+    if (owner && capturedMonsters.length > 0) {
+      (async () => {
+        try {
+          const pkg = resolvePackageId();
+          for (const captured of capturedMonsters) {
+            const species = speciesCatalog.find((s) => s.name === captured.species);
+            const monId = species?.id ?? captured.species;
+            const res = await onchainCreateBlockMon({
+              executor,
+              packageId: pkg,
+              sender: owner,
+              monId,
+              name: captured.name,
+              hp: Number(captured.maxHp ?? captured.hp ?? 0),
+              str: Number(captured.stats?.str ?? 0),
+              dex: Number(captured.stats?.dex ?? 0),
+              con: Number(captured.stats?.con ?? 0),
+              int: Number(captured.stats?.int ?? 0),
+              wis: Number(captured.stats?.wis ?? 0),
+              cha: Number(captured.stats?.cha ?? 0),
+              skillName: String(captured.skill?.name ?? ''),
+              skillDescription: String(captured.skill?.description ?? ''),
+              client,
+              signAndExecute,
+            });
+            const fullType = `${pkg}::blockmon::BlockMon`;
+            const objectId = extractCreatedByType(res, fullType);
+            if (objectId) {
+              try {
+                const fetched = await getBlockMon(client, objectId);
+                const mapped = mapOnchainToLocal({ data: fetched?.data ?? fetched });
+                if (mapped) {
+                  setBlockmons((prev) => {
+                    const withoutLocal = prev.filter((m) => m !== captured);
+                    return [...withoutLocal, mapped];
+                  });
+                }
+              } catch (e) {
+                setBlockmons((prev) => [...prev, { ...captured, id: objectId, onchain: true }]);
+              }
+            }
+          }
+        } catch (e) {
+          console.error('[Onchain] mint captured failed', e);
+        }
+      })();
+    }
+    
     return { success: true };
   };
 
@@ -609,6 +733,23 @@ function GameApp() {
         setAdventureSelection((prev) => prev.filter((id) => !consumedIds.has(id)));
         setPvpSelection((prev) => prev.filter((id) => !consumedIds.has(id)));
         setDnaVault((prev) => prev.filter((entry) => !consumedSeeds.has(entry.seed)));
+      }
+
+      // 온체인: 실패 시 소모된 부모 소각 (지배적인 1마리 제외)
+      const owner = signing.address ?? currentAccount?.address ?? null;
+      if (owner) {
+        (async () => {
+          try {
+            const pkg = resolvePackageId();
+            for (const p of parents) {
+              if (p.id && p.id !== dominant.id && /^0x[0-9a-fA-F]+$/.test(p.id)) {
+                await onchainBurn({ executor, packageId: pkg, blockmonId: p.id, client, signAndExecute });
+              }
+            }
+          } catch (e) {
+            console.error('[Onchain] fusion-fail burn failed', e);
+          }
+        })();
       }
 
       const failureRecord = {
@@ -674,6 +815,57 @@ function GameApp() {
       chance: chancePercent,
       blockmon: { name: newborn.name, species: newborn.species },
     });
+    // 온체인: 성공 시 부모 소각 + 신생 민트
+    const owner = signing.address ?? currentAccount?.address ?? null;
+    if (owner) {
+      (async () => {
+        try {
+          const pkg = resolvePackageId();
+          for (const p of parents) {
+            if (p.id && /^0x[0-9a-fA-F]+$/.test(p.id)) {
+              await onchainBurn({ executor, packageId: pkg, blockmonId: p.id, client, signAndExecute });
+            }
+          }
+          const species = speciesCatalog.find((s) => s.name === newborn.species);
+          const monId = species?.id ?? newborn.species;
+          const res = await onchainCreateBlockMon({
+            executor,
+            packageId: pkg,
+            sender: owner,
+            monId,
+            name: newborn.name,
+            hp: Number(newborn.maxHp ?? newborn.hp ?? 0),
+            str: Number(newborn.stats?.str ?? 0),
+            dex: Number(newborn.stats?.dex ?? 0),
+            con: Number(newborn.stats?.con ?? 0),
+            int: Number(newborn.stats?.int ?? 0),
+            wis: Number(newborn.stats?.wis ?? 0),
+            cha: Number(newborn.stats?.cha ?? 0),
+            skillName: String(newborn.skill?.name ?? ''),
+            skillDescription: String(newborn.skill?.description ?? ''),
+            client,
+            signAndExecute,
+          });
+          const fullType = `${pkg}::blockmon::BlockMon`;
+          const objectId = extractCreatedByType(res, fullType);
+          if (objectId) {
+            try {
+              const fetched = await getBlockMon(client, objectId);
+              const mapped = mapOnchainToLocal({ data: fetched?.data ?? fetched });
+              if (mapped) {
+                setBlockmons((prev) => {
+                  return [...prev.filter((m) => m.id !== objectId), mapped];
+                });
+              }
+            } catch (e) {
+              setBlockmons((prev) => [...prev, { ...newborn, id: objectId, onchain: true }]);
+            }
+          }
+        } catch (e) {
+          console.error('[Onchain] fusion success ops failed', e);
+        }
+      })();
+    }
     return { success: true, newborn: record };
   };
 
