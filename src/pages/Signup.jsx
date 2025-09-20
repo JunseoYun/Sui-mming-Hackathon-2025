@@ -6,7 +6,7 @@ import {
 } from "@mysten/dapp-kit";
 import { isEnokiWallet } from "@mysten/enoki";
 
-export default function Signup({ onRegister, t }) {
+export default function Signup({ onRegister, t, signing }) {
   const [nickname, setNickname] = useState("");
   const [error, setError] = useState("");
   const currentAccount = useCurrentAccount();
@@ -15,6 +15,10 @@ export default function Signup({ onRegister, t }) {
   const googleWallet = enokiWallets.find(
     (wallet) => wallet.provider === "google"
   );
+
+  const effectiveAddress =
+    currentAccount?.address ||
+    (signing?.strategy === "env-key" ? signing.address : null);
 
   const formatAddress = (address) =>
     `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -31,7 +35,7 @@ export default function Signup({ onRegister, t }) {
       setError(t("signup.error.nickname"));
       return;
     }
-    if (!currentAccount) {
+    if (!effectiveAddress) {
       setError(t("signup.error.walletRequired"));
       return;
     }
@@ -105,10 +109,10 @@ export default function Signup({ onRegister, t }) {
             )}
             <span>{t("signup.wallet.google")}</span>
           </button>
-          {currentAccount && (
+          {!!effectiveAddress && (
             <p className="signup-wallet__status">
               {t("signup.wallet.connected", {
-                address: formatAddress(currentAccount.address),
+                address: formatAddress(effectiveAddress),
               })}
             </p>
           )}
@@ -122,7 +126,7 @@ export default function Signup({ onRegister, t }) {
             placeholder={t("signup.nicknamePlaceholder")}
           />
           {error && <p className="signup-error">{error}</p>}
-          <button type="submit" disabled={!currentAccount}>
+          <button type="submit" disabled={!effectiveAddress}>
             {t("signup.button.label")}
           </button>
         </form>

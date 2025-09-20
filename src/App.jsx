@@ -1079,7 +1079,7 @@ function GameApp() {
       <div className="app signup-app">
         {header}
         <main className="app__content">
-          <Signup onRegister={registerUser} language={language} t={t} />
+          <Signup onRegister={registerUser} language={language} t={t} signing={signing} />
         </main>
       </div>
     );
