@@ -47,6 +47,7 @@ import {
   extractCreatedByType,
   getBlockMon,
   burn as onchainBurn,
+  burnMany as onchainBurnMany,
   resolvePackageId,
 } from "./utils/blockmon";
 import { catalog as speciesCatalog } from "./utils/random";
@@ -1006,16 +1007,17 @@ function GameApp() {
         setDnaVault((prev) => prev.filter((entry) => !consumedSeeds.has(entry.seed)));
       }
 
-      // 온체인: 실패 시 소모된 부모 소각 (지배적인 1마리 제외)
+      // 온체인: 실패 시 소모된 부모 소각 (지배적인 1마리 제외) - 단일 트랜잭션으로 처리
       const owner = signing.address ?? currentAccount?.address ?? null;
       if (owner) {
         (async () => {
           try {
             const pkg = resolvePackageId();
-            for (const p of parents) {
-              if (p.id && p.id !== dominant.id && /^0x[0-9a-fA-F]+$/.test(p.id)) {
-                await onchainBurn({ executor, packageId: pkg, blockmonId: p.id, client, signAndExecute });
-              }
+            const burnIds = parents
+              .filter((p) => p.id && p.id !== dominant.id && /^0x[0-9a-fA-F]+$/.test(p.id))
+              .map((p) => p.id);
+            if (burnIds.length > 0) {
+              await onchainBurnMany({ executor, packageId: pkg, blockmonIds: burnIds, client, signAndExecute });
             }
           } catch (e) {
             console.error('[Onchain] fusion-fail burn failed', e);

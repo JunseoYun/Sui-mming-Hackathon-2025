@@ -229,6 +229,20 @@ export function buildBurnTx({ packageId, blockmonId }) {
   return tx;
 }
 
+// Build: burn many (consumes multiple objects in one tx)
+export function buildBurnManyTx({ packageId, blockmonIds }) {
+  const pkg = resolvePackageId(packageId);
+  const tx = new TransactionBlock();
+  for (const id of blockmonIds || []) {
+    if (!id) continue;
+    tx.moveCall({
+      target: fn(pkg, "burn"),
+      arguments: [tx.object(id)],
+    });
+  }
+  return tx;
+}
+
 // Convenience high-level operations that both build and execute
 export async function createBlockMon({
   executor,
@@ -304,6 +318,11 @@ export async function recordBattle({
 
 export async function burn({ executor, packageId, blockmonId, client, signAndExecute }) {
   const tx = buildBurnTx({ packageId, blockmonId });
+  return executeTransaction({ tx, executor, client, signAndExecute });
+}
+
+export async function burnMany({ executor, packageId, blockmonIds, client, signAndExecute }) {
+  const tx = buildBurnManyTx({ packageId, blockmonIds });
   return executeTransaction({ tx, executor, client, signAndExecute });
 }
 
