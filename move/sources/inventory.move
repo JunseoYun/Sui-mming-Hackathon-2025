@@ -158,7 +158,7 @@ entry fun add_potion_to_inventory(
     effect_value: u64,
     quantity_to_add: u64,
     description: String,
-    ctx: &mut TxContext,
+    ctx: &TxContext,
 ) {
     let owner = tx_context::sender(ctx);
     let inv_addr = object::uid_to_address(&inv.id);
@@ -198,7 +198,7 @@ entry fun use_potions_from_inventory(
     inv: &mut Inventory,
     potion_kind: u8,
     quantity_to_use: u64,
-    ctx: &mut TxContext,
+    ctx: &TxContext,
 ) {
     let owner = tx_context::sender(ctx);
     let inv_addr = object::uid_to_address(&inv.id);
@@ -278,7 +278,7 @@ public fun create_bm_token(
 entry fun add_bm_tokens(
     bm_token: &mut BMToken,
     amount_to_add: u64,
-    ctx: &mut TxContext,
+    ctx: &TxContext,
 ) {
     let owner = tx_context::sender(ctx);
     let token_id = object::uid_to_address(&bm_token.id);
@@ -298,7 +298,7 @@ entry fun add_bm_tokens(
 entry fun subtract_bm_tokens(
     bm_token: &mut BMToken,
     amount_to_subtract: u64,
-    ctx: &mut TxContext,
+    ctx: &TxContext,
 ) {
     let owner = tx_context::sender(ctx);
     let token_id = object::uid_to_address(&bm_token.id);
@@ -340,7 +340,7 @@ entry fun set_bm_token_type(bm_token: &mut BMToken, new_type: String) {
 }
 
 /// BM 토큰 삭제 (소각)
-entry fun burn_bm_token(bm_token: BMToken, ctx: &mut TxContext) {
+entry fun burn_bm_token(bm_token: BMToken, ctx: &TxContext) {
     let owner = tx_context::sender(ctx);
     let token_id = object::uid_to_address(&bm_token.id);
     let amount = bm_token.amount;
@@ -403,7 +403,7 @@ entry fun mint_potion(
 entry fun add_potions(
     potion: &mut Potion,
     quantity_to_add: u64,
-    ctx: &mut TxContext,
+    ctx: &TxContext,
 ) {
     let owner = tx_context::sender(ctx);
     let potion_id = object::uid_to_address(&potion.id);
@@ -423,7 +423,7 @@ entry fun add_potions(
 entry fun use_potion(
     potion: &mut Potion,
     quantity_to_use: u64,
-    ctx: &mut TxContext,
+    ctx: &TxContext,
 ) {
     let owner = tx_context::sender(ctx);
     let potion_id = object::uid_to_address(&potion.id);
@@ -478,7 +478,7 @@ public fun set_potion_description(potion: &mut Potion, new_description: String) 
 }
 
 /// 포션 삭제 (소각)
-public fun burn_potion(potion: Potion, ctx: &mut TxContext) {
+public fun burn_potion(potion: Potion, ctx: &TxContext) {
     let owner = tx_context::sender(ctx);
     let potion_id = object::uid_to_address(&potion.id);
     let potion_type = potion.potion_type;
