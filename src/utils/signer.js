@@ -109,7 +109,7 @@ export function buildWalletExecutor(signAndExecute) {
   }
   return async (tx) =>
     signAndExecute({
-      transaction: tx,
+      transactionBlock: tx,
       options: { showEffects: true, showObjectChanges: true, showEvents: true },
     });
 }

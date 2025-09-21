@@ -4,5 +4,5 @@ import react from "@vitejs/plugin-react";
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: "Sui-mming-Hackathon-2025",
+  base: "/Sui-mming-Hackathon-2025/",
 });

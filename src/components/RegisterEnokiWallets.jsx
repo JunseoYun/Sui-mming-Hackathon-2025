@@ -11,7 +11,8 @@ export default function RegisterEnokiWallets() {
       return;
     }
 
-    const redirectUrl = `${window.location.origin}${window.location.pathname}`;
+    const base = (import.meta.env?.BASE_URL || window.location.pathname || "/").replace(/\/index\.html$/i, "");
+    const redirectUrl = import.meta.env.VITE_ENOKI_REDIRECT_URL || `${window.location.origin}${base}`;
 
     console.log("[Enoki] 지갑 등록 시작", { network, redirectUrl });
 
