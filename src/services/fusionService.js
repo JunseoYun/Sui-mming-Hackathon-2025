@@ -19,6 +19,7 @@ export function createFusionService({
   // chain deps
   resolvePackageId,
   onchainBurnMany,
+  onchainBurn,
   onchainCreateBlockMon,
   listOwnedBMTokens,
   extractCreatedByType,
@@ -26,11 +27,36 @@ export function createFusionService({
   mapOnchainToLocal,
   queueAndRetry,
   enqueuePendingBurns,
+  removeBurnIdsFromQueue,
   client,
   signing,
   currentAccount,
   executor,
 }) {
+  async function sequentialBurnAndConfirm({ pkg, burnIds }) {
+    if (!Array.isArray(burnIds) || burnIds.length === 0) return;
+    for (const id of burnIds) {
+      if (!id) continue;
+      try {
+        const res = await queueAndRetry('fusion.burn.single', async () => onchainBurn({ executor, packageId: pkg, blockmonId: id, client }), { attempts: 6, baseDelayMs: 600 });
+        try {
+          const digest = res?.digest || res?.effects?.transactionDigest || res?.effectsDigest;
+          if (digest && typeof client?.waitForTransactionBlock === 'function') {
+            await client.waitForTransactionBlock({ digest, options: { showEffects: true, showObjectChanges: true } });
+          }
+          removeBurnIdsFromQueue?.([id]);
+          console.log('[Burn] confirmed', { id, digest });
+        } catch (_) {
+          // best-effort remove if already gone
+          removeBurnIdsFromQueue?.([id]);
+          console.log('[Burn] confirmed (no digest)', { id });
+        }
+      } catch (e) {
+        console.error('[Onchain] fusion burn failed (kept in queue)', { id, error: e });
+      }
+    }
+  }
+
   const performFusion = (parentIds) => {
     const uniqueIds = Array.from(new Set(parentIds)).filter(Boolean);
     if (uniqueIds.length < 2) {
@@ -96,11 +122,8 @@ export function createFusionService({
             const pkg = resolvePackageId();
             const burnIds = parents.filter((p) => p.id && p.id !== dominant.id && /^0x[0-9a-fA-F]+$/.test(p.id)).map((p) => p.id);
             if (burnIds.length > 0) {
-              try {
-                await queueAndRetry('fusionFail.burnMany', async () => onchainBurnMany({ executor, packageId: pkg, blockmonIds: burnIds, client }), { attempts: 4, baseDelayMs: 700 });
-              } catch (err) {
-                enqueuePendingBurns(burnIds);
-              }
+              enqueuePendingBurns(burnIds);
+              await sequentialBurnAndConfirm({ pkg, burnIds });
             }
           } catch (e) {
             console.error('[Onchain] fusion-fail burn failed', e);
@@ -140,16 +163,8 @@ export function createFusionService({
         try {
           const pkg = resolvePackageId();
           const burnIds = parents.filter((p) => p.id && /^0x[0-9a-fA-F]+$/.test(p.id)).map((p) => p.id);
-          try {
-            await queueAndRetry('fusion.burnMany', async () => {
-              if (burnIds.length) {
-                await onchainBurnMany({ executor, packageId: pkg, blockmonIds: burnIds, client });
-              }
-            }, { attempts: 4, baseDelayMs: 700 });
-          } catch (burnErr) {
-            enqueuePendingBurns(burnIds);
-            throw burnErr;
-          }
+          enqueuePendingBurns(burnIds);
+          await sequentialBurnAndConfirm({ pkg, burnIds });
           const species = speciesCatalog.find((s) => s.name === newborn.species);
           const monId = species?.id ?? newborn.species;
           const res = await queueAndRetry('fusion.mint', async () => onchainCreateBlockMon({
